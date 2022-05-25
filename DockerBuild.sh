@@ -4,13 +4,31 @@ echo "Sart time=$(date +"%T")"
 IMG_NAME="lmwafer/orb-slam-3-ready"
 IMG_TAG="1.1-ubuntu18.04"
 CTNR_NAME="orb-3-container"
-CTNR_BASE_DIR="/app"
+CTNR_BASE_DIR="/dpds"
 
-while getopts "t:r:e" opt
+while getopts "i:t:br:e" opt
 do
   case $opt in
+    i)
+        if [ "$OPTARG" == "my" ]
+        then
+            IMG_NAME="my-orb-slam3"
+            IMG_TAG="latest"
+            CTNR_NAME="my-orb-3-ctnr"
+        fi
+        ;;
     t)
         IMG_TAG="$OPTARG"
+        ;;
+    b) 
+        START="$(TZ=UTC0 printf '%(%s)T\n' '-1')" # `-1`  is the current time
+        
+        docker rmi $IMG_NAME
+        docker build --no-cache -t $IMG_NAME .
+        
+        # Pring elapsed time
+        ELAPSED=$(( $(TZ=UTC0 printf '%(%s)T\n' '-1') - START ))
+        TZ=UTC0 printf 'Build duration=%(%H:%M:%S)T\n' "$ELAPSED"
         ;;
     r)
         if [ "$OPTARG" == "m" ]
@@ -25,7 +43,6 @@ do
             && docker run --privileged \
                 $OPTARG \
                 -it \
-                --gpus all \
                 --name $CTNR_NAME \
                 -p 8087:8087 \
                 -e DISPLAY=$DISPLAY \
@@ -33,7 +50,8 @@ do
                 -v /tmp/.X11-unix:/tmp/.X11-unix \
                 -v /dev:/dev:ro \
                 --mount type=volume,src="vscode-extensions",dst="/home/user/.vscode-server/extensions" \
-                --mount type=bind,src="$PWD/datasets",dst="/dpds/ORB_SLAM3/datasets" \
+                --mount type=volume,src="apt-list",dst="/var/lib/apt/lists/" \
+                --mount type=bind,src="$PWD",dst="$CTNR_BASE_DIR/ORB_SLAM3" \
                 "$IMG_NAME:$IMG_TAG"
         # Disable tracing
         set +x        
@@ -51,14 +69,6 @@ do
         ;;
     *)
         echo "*"
-        #--user="$(id -u):$(id -g)" --gpus=all\
-        # docker run --rm -it --init \
-        #     --ipc=host \
-        #     --mount type=volume,src="vscode-extensions",dst="/home/user/.vscode-server/extensions" \
-        #     --mount type=volume,src="apt-list",dst="/var/lib/apt/lists/" \
-        #     --mount type=bind,src="$PWD",dst="$CTNR_BASE_DIR" \
-        #     --workdir "$CTNR_BASE_DIR" \
-        #     $IMG_NAME bash
         ;;
   esac
 done
