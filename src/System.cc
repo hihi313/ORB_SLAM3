@@ -200,6 +200,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
         mpLocalMapper->mThFarPoints = settings_->thFarPoints();
     else
         mpLocalMapper->mThFarPoints = fsSettings["thFarPoints"];
+    // Set to ignore points more than ?m if the sequence is outdoor
     if(mpLocalMapper->mThFarPoints!=0)
     {
         cout << "Discard points further than " << mpLocalMapper->mThFarPoints << " m from current camera" << endl;
