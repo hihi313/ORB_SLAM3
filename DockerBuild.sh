@@ -15,6 +15,9 @@ do
             IMG_NAME="my-orb-slam3"
             IMG_TAG="latest"
             CTNR_NAME="my-orb-3-ctnr"
+            SLAM_DIR="--mount type=bind,src=$PWD,dst=$CTNR_BASE_DIR/ORB_SLAM3"
+        else
+            SLAM_DIR=""
         fi
         ;;
     t)
@@ -33,25 +36,27 @@ do
     r)
         if [ "$OPTARG" == "m" ]
         then
-            OPTARG="--rm"
+            RM="--rm"
         else
-            OPTARG=""
+            RM=""
         fi
         # Enable tracing
         set -x
-        sudo xhost +local:root \
+        # xhost +local:root \
+        # -e DISPLAY=$DISPLAY \
+        sudo xhost +localhost \
             && docker run --privileged \
-                $OPTARG \
+                $RM \
                 -it \
                 --name $CTNR_NAME \
                 -p 8087:8087 \
-                -e DISPLAY=$DISPLAY \
+                -e DISPLAY="host.docker.internal:0" \
                 -e QT_X11_NO_MITSHM=1 \
                 -v /tmp/.X11-unix:/tmp/.X11-unix \
                 -v /dev:/dev:ro \
                 --mount type=volume,src="vscode-extensions",dst="/home/user/.vscode-server/extensions" \
                 --mount type=volume,src="apt-list",dst="/var/lib/apt/lists/" \
-                --mount type=bind,src="$PWD",dst="$CTNR_BASE_DIR/ORB_SLAM3" \
+                $SLAM_DIR \
                 "$IMG_NAME:$IMG_TAG"
         # Disable tracing
         set +x        
