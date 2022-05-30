@@ -54,8 +54,9 @@ do
                 -e QT_X11_NO_MITSHM=1 \
                 -v /tmp/.X11-unix:/tmp/.X11-unix \
                 -v /dev:/dev:ro \
-                --mount type=volume,src="vscode-extensions",dst="/home/user/.vscode-server/extensions" \
+                --mount type=volume,src="vscode-extensions",dst="/root/.vscode-server/extensions" \
                 --mount type=volume,src="apt-list",dst="/var/lib/apt/lists/" \
+                --mount type=bind,src="/Users/rolf/Documents/Datasets/MH_04_difficult",dst="$CTNR_BASE_DIR/ORB_SLAM3/datasets" \
                 $SLAM_DIR \
                 "$IMG_NAME:$IMG_TAG"
         # Disable tracing
