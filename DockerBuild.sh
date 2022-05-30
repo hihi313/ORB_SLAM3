@@ -1,4 +1,4 @@
-#!/usr/local/bin/bash
+#!/bin/bash
 
 echo "Sart time=$(date +"%T")"
 IMG_NAME="lmwafer/orb-slam-3-ready"
