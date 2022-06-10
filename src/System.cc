@@ -412,6 +412,7 @@ Sophus::SE3f System::TrackMonocular(const cv::Mat &im, const double &timestamp, 
         exit(-1);
     }
 
+    // preproccessed frame/image to track
     cv::Mat imToFeed = im.clone();
     if(settings_ && settings_->needToResize()){
         cv::Mat resizedIm;
@@ -419,7 +420,7 @@ Sophus::SE3f System::TrackMonocular(const cv::Mat &im, const double &timestamp, 
         imToFeed = resizedIm;
     }
 
-    // Check mode change
+    // Check mode change (UI checkbox change)
     {
         unique_lock<mutex> lock(mMutexMode);
         if(mbActivateLocalizationMode)
@@ -443,7 +444,7 @@ Sophus::SE3f System::TrackMonocular(const cv::Mat &im, const double &timestamp, 
         }
     }
 
-    // Check reset
+    // Check reset (UI checkbox change)
     {
         unique_lock<mutex> lock(mMutexReset);
         if(mbReset)
