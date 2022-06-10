@@ -569,9 +569,6 @@ _deps
 
 # End of https://www.toptal.com/developers/gitignore/api/windows,macos,linux,visualstudio,visualstudiocode,zsh,c++
 
-**/[Dd]ata[Ss]et
-**/[Dd]ata[Ss]ets
-
 CMakeLists.txt.user
 CMakeLists_modified.txt
 
@@ -691,3 +688,8 @@ Examples_old/Tests/viewer_dataset_old
 Examples_old/Tests/sophus_test_old
 Examples_old/ROS/ORB_SLAM3/CMakeLists.txt.user_old
 Examples_old/ROS/ORB_SLAM3/build/
+
+**/[Dd]ata[Ss]et
+**/[Dd]ata[Ss]ets
+test/*.[Jj][Pp][Gg]
+test/*.[Pp][Nn][Gg]

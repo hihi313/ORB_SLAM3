@@ -19,7 +19,7 @@ double varianceOfLaplacian(const Mat& src, Mat *lap_result = NULL)
     double focusMeasure = sigma.val[0]*sigma.val[0];
     return focusMeasure;
 }
-
+// Draw the PSF in spectrum domain
 void calcPSF(Mat& outputImg, Size filterSize, int R)
 {
     Mat h(filterSize, CV_32F, Scalar(0));
@@ -80,66 +80,73 @@ void calcWnrFilter(const Mat& input_h_PSF, Mat& output_G, double nsr)
     divide(planes[0], denom, output_G);
 }
 
+void test(const int& i)
+{
+    cout << "i = " << i << endl;
+}
+
 int main(int argc, char** argv)
 {
     setbuf(stdout, NULL);
 
-    // Kernel size
-    Size kernel = Size(9, 9);
-    int R = stoi(argv[1]);
-    int SNR = stoi(argv[2]);
+    test();
 
-    Mat image;
-    image = imread(argv[3], IMREAD_GRAYSCALE);
-    // imshow("image", image);
+    { // Blur detection & deblur test
+        // Kernel size
+        Size kernel = Size(9, 9);
+        int R = stoi(argv[1]);
+        int SNR = stoi(argv[2]);
 
-    // Blur
-    Mat blur;
-    cv::blur(image, blur, kernel);
-    // imshow("blur", blur);
+        Mat image;
+        image = imread(argv[3], IMREAD_GRAYSCALE);
+        imshow("original image", image);
 
-    // Gaussian blur
-    Mat gaussian;
-    GaussianBlur(image, gaussian, kernel, 0); // both sigma are 0 == compute by kernel size
-    // imshow("Gaussian", gaussian);
+        // Blur
+        Mat blur;
+        cv::blur(image, blur, kernel);
+        // imshow("blur", blur);
 
-    // Median blur
-    Mat median;
-    medianBlur(image, median, kernel.height);
-    // imshow("Median", median);
+        // Gaussian blur
+        Mat gaussian;
+        GaussianBlur(image, gaussian, kernel, 0); // both sigma are 0 == compute by kernel size
+        // imshow("Gaussian", gaussian);
 
-    vector<Mat> imgs;
-    imgs.push_back(image);
-    imgs.push_back(blur);
-    imgs.push_back(gaussian);
-    imgs.push_back(median);
-    for(int i = 0; i < imgs.size(); i++)
-    {
-        // Check if image is blured (by Variance of Laplacian)
-        printf("Focusness image[%d]: %f\n", i, varianceOfLaplacian(imgs[i]));
-        // if(i == 0) 
-        // {
-        //     imshow("image[0]", imgs[i]);
-        //     continue;
-        // }
+        // Median blur
+        Mat median;
+        medianBlur(image, median, kernel.height);
+        // imshow("Median", median);
 
-        // Image deblur (by out of focus deblur)
-        Mat img_deblur;
-        // it needs to process even image only
-        Rect roi = Rect(0, 0, imgs[i].cols & -2, imgs[i].rows & -2);
-        //Hw calculation (start)
-        Mat Hw, h;
-        calcPSF(h, roi.size(), R);
-        calcWnrFilter(h, Hw, 1.0 / double(SNR));
-        // filtering (start)
-        filter2DFreq(imgs[i](roi), img_deblur, Hw);
+        vector<Mat> imgs;
+        imgs.push_back(image);
+        imgs.push_back(blur);
+        imgs.push_back(gaussian);
+        imgs.push_back(median);
+        for (int i = 0; i < imgs.size(); i++)
+        {
+            // Check if image is blured (by Variance of Laplacian)
+            printf("Focusness image[%d]: %f\n", i, varianceOfLaplacian(imgs[i]));
+            // if(i == 0)
+            // {
+            //     imshow("image[0]", imgs[i]);
+            //     continue;
+            // }
 
-        img_deblur.convertTo(img_deblur, CV_8U);
-        normalize(img_deblur, img_deblur, 0, 255, NORM_MINMAX);
-        imshow(format("deblured image[%d]", i), img_deblur);
+            // Image deblur (by out of focus deblur)
+            Mat img_deblur;
+            // it needs to process even image only
+            Rect roi = Rect(0, 0, imgs[i].cols & -2, imgs[i].rows & -2);
+            // Hw calculation (start)
+            Mat Hw, h;
+            calcPSF(h, roi.size(), R);
+            calcWnrFilter(h, Hw, 1.0 / double(SNR));
+            // filtering (start)
+            filter2DFreq(imgs[i](roi), img_deblur, Hw);
+
+            img_deblur.convertTo(img_deblur, CV_8U);
+            normalize(img_deblur, img_deblur, 0, 255, NORM_MINMAX);
+            imshow(format("deblured image[%d]", i), img_deblur);
+        }
     }
-
-    
 
     waitKey(0);
     return 0;
