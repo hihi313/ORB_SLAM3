@@ -129,6 +129,7 @@ int main(int argc, char **argv)
 #endif
             }
 
+    // t1: to compute tracking time of current frame
     #ifdef COMPILEDWITHC11
             std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
     #else
@@ -139,6 +140,7 @@ int main(int argc, char **argv)
             // cout << "tframe = " << tframe << endl;
             SLAM.TrackMonocular(im,tframe); // TODO change to monocular_inertial
 
+    // t2: to compute tracking time of current frame
     #ifdef COMPILEDWITHC11
             std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
     #else
