@@ -1,5 +1,9 @@
 {
+    // "cmake.debugConfig":{
+    //     "miDebuggerPath":"/usr/share/gdb",
+    // },
     "files.associations": {
-        "vector": "cpp"
+        "vector": "cpp",
+        "chrono": "cpp"
     }
 }

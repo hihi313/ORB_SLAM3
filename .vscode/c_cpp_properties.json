@@ -1,7 +1,7 @@
 {
     "configurations": [
         {
-            "name": "Mac",
+            "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
                 "/usr/local/include/opencv4/**",
