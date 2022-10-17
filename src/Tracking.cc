@@ -4294,7 +4294,7 @@ bool poseEstimationDirect(const vector<Measurement> &measurements, cv::Mat *gray
 }
 bool Tracking::TrackWithSparseAlignment(bool bTrackLastKF)
 {
-    // Get measurements of last frame
+    // Last frame = reference frame
     // Check last frame 3D point inliner number
     int nInliner_lastFrame = 0;
     for (int i = 0; i < mLastFrame.N; i++)
@@ -4303,8 +4303,41 @@ bool Tracking::TrackWithSparseAlignment(bool bTrackLastKF)
             mLastFrame.mvbOutlier[i] == false)
             nInliner_lastFrame++;
     }
-    if (nInliner_lastFrame <  30){
+    if (nInliner_lastFrame < 30)
+    {
         printf("last frame has no enough inliner map points(%d)", nInliner_lastFrame);
+        return false;
     }
+
+    // Get measurements from last frame
+    vector<Measurement> measurements;
+    for (int i = 0; i < mLastFrame.N; i++)
+    {
+        MapPoint *pMP = LastFrame.mvpMapPoints[i];
+        if (pMP && mLastFrame.mvpMapPoints[i]->isBad() == false &&
+            mLastFrame.mvbOutlier[i] == false)
+        {
+            // Get 3D point (in last frame plane) from last frame
+            Eigen::Vector3f x3Dw = pMP->GetWorldPos();
+            const Eigen::Vector3f Trw = mLastFrame.mTcw;
+            Eigen::Vector3f x3Dr = Trw * x3Dw; // Transform to last frame's plane
+            // Get 2D gray scale pixel value in last frame
+            // get projected 2D coordinate
+            Eigen::Vector2f uv = mLastFrame.mpCamera->project(x3Dr);
+            if (uv(0) < mLastFrame.mnMinX || uv(0) > mLastFrame.mnMaxX)
+                continue;
+            if (uv(1) < mLastFrame.mnMinY || uv(1) > mLastFrame.mnMaxY)
+                continue;
+            // get pixel value
+            const cv::Mat &lastImg = mLastFrame.mvImagePyramid[0];
+            float grayscale = float(gray.ptr<uchar>(cvRound(uv(1)))[cvRound(uv(0))]);
+            measurements.push_back(Measurement(p3d, grayscale));
+        }
+    }
+    // chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
+    // TODO: fill the K, init Tcw as I
+    poseEstimationDirect(measurements, &mCurrentFrame.mvImagePyramid[0], K, Tcw);
+    // chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
+    // chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
 }
-} //namespace ORB_SLAM
+} // namespace ORB_SLAM
