@@ -4292,5 +4292,19 @@ bool poseEstimationDirect(const vector<Measurement> &measurements, cv::Mat *gray
 
     return true;
 }
-
+bool Tracking::TrackWithSparseAlignment(bool bTrackLastKF)
+{
+    // Get measurements of last frame
+    // Check last frame 3D point inliner number
+    int nInliner_lastFrame = 0;
+    for (int i = 0; i < mLastFrame.N; i++)
+    {
+        if (mLastFrame.mvpMapPoints[i] && mLastFrame.mvpMapPoints[i]->isBad() == false &&
+            mLastFrame.mvbOutlier[i] == false)
+            nInliner_lastFrame++;
+    }
+    if (nInliner_lastFrame <  30){
+        printf("last frame has no enough inliner map points(%d)", nInliner_lastFrame);
+    }
+}
 } //namespace ORB_SLAM
