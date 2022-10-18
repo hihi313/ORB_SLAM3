@@ -366,6 +366,8 @@ protected:
     std::mutex mMutexStop;
 #endif
 
+    bool TrackWithSparseAlignment(bool bTrackLastKF);
+
 public:
     cv::Mat mImRight;
 };

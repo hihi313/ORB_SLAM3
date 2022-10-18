@@ -4129,169 +4129,171 @@ void Tracking::Release()
 // 一次测量的值，包括一个世界坐标系下三维点与一个灰度值
 struct Measurement
 {
-    Measurement(Eigen::Vector3d p, float g) : pos_world(p), grayscale(g) {}
-    Eigen::Vector3d pos_world;
+    Measurement(Eigen::Vector3f p, float g) : pos_world(p), grayscale(g) {}
+    Eigen::Vector3f pos_world;
     float grayscale;
 };
 
-inline Eigen::Vector3d project2Dto3D(int x, int y, int d, float fx, float fy, float cx, float cy, float scale)
-{
-    float zz = float(d) / scale;
-    float xx = zz * (x - cx) / fx;
-    float yy = zz * (y - cy) / fy;
-    return Eigen::Vector3d(xx, yy, zz);
-}
+// inline Eigen::Vector3d project2Dto3D(int x, int y, int d, float fx, float fy, float cx, float cy, float scale)
+// {
+//     float zz = float(d) / scale;
+//     float xx = zz * (x - cx) / fx;
+//     float yy = zz * (y - cy) / fy;
+//     return Eigen::Vector3d(xx, yy, zz);
+// }
 
-inline Eigen::Vector2d project3Dto2D(float x, float y, float z, float fx, float fy, float cx, float cy)
-{
-    float u = fx * x / z + cx;
-    float v = fy * y / z + cy;
-    return Eigen::Vector2d(u, v);
-}
+// inline Eigen::Vector2d project3Dto2D(float x, float y, float z, float fx, float fy, float cx, float cy)
+// {
+//     float u = fx * x / z + cx;
+//     float v = fy * y / z + cy;
+//     return Eigen::Vector2d(u, v);
+// }
+
+// project a 3d point into an image plane, the error is photometric error
+// an unary edge with one vertex SE3Expmap (the pose of camera)
+// class EdgeSE3ProjectDirect : public g2o::BaseUnaryEdge<1, float, g2o::VertexSE3Expmap>
+// {
+// public:
+//     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+//     EdgeSE3ProjectDirect() {}
+
+//     EdgeSE3ProjectDirect(Eigen::Vector3f point, float fx, float fy, float cx, float cy, cv::Mat *image)
+//         : x_world_(point), fx_(fx), fy_(fy), cx_(cx), cy_(cy), image_(image)
+//     {
+//     }
+
+//     virtual void computeError()
+//     {
+//         const g2o::VertexSE3Expmap *v = static_cast<const g2o::VertexSE3Expmap *>(_vertices[0]);
+//         Eigen::Vector3f x_local = v->estimate().map(x_world_);
+//         float x = x_local[0] * fx_ / x_local[2] + cx_;
+//         float y = x_local[1] * fy_ / x_local[2] + cy_;
+//         // check x,y is in the image
+//         if (x - 4 < 0 || (x + 4) > image_->cols || (y - 4) < 0 || (y + 4) > image_->rows)
+//         {
+//             _error(0, 0) = 0.0;
+//             this->setLevel(1);
+//         }
+//         else
+//         {
+//             _error(0, 0) = getPixelValue(x, y) - _measurement;
+//         }
+//     }
+
+//     // plus in manifold
+//     virtual void linearizeOplus()
+//     {
+//         if (level() == 1)
+//         {
+//             _jacobianOplusXi = Eigen::Matrix<float, 1, 6>::Zero();
+//             return;
+//         }
+//         g2o::VertexSE3Expmap *vtx = static_cast<g2o::VertexSE3Expmap *>(_vertices[0]);
+//         Eigen::Vector3f xyz_trans = vtx->estimate().map(x_world_); // q in book
+
+//         float x = xyz_trans[0];
+//         float y = xyz_trans[1];
+//         float invz = 1.0 / xyz_trans[2];
+//         float invz_2 = invz * invz;
+
+//         float u = x * fx_ * invz + cx_;
+//         float v = y * fy_ * invz + cy_;
+
+//         // jacobian from se3 to u,v
+//         // NOTE that in g2o the Lie algebra is (\omega, \epsilon), where \omega is so(3) and \epsilon the translation
+//         Eigen::Matrix<float, 2, 6> jacobian_uv_ksai;
+
+//         jacobian_uv_ksai(0, 0) = -x * y * invz_2 * fx_;
+//         jacobian_uv_ksai(0, 1) = (1 + (x * x * invz_2)) * fx_;
+//         jacobian_uv_ksai(0, 2) = -y * invz * fx_;
+//         jacobian_uv_ksai(0, 3) = invz * fx_;
+//         jacobian_uv_ksai(0, 4) = 0;
+//         jacobian_uv_ksai(0, 5) = -x * invz_2 * fx_;
+
+//         jacobian_uv_ksai(1, 0) = -(1 + y * y * invz_2) * fy_;
+//         jacobian_uv_ksai(1, 1) = x * y * invz_2 * fy_;
+//         jacobian_uv_ksai(1, 2) = x * invz * fy_;
+//         jacobian_uv_ksai(1, 3) = 0;
+//         jacobian_uv_ksai(1, 4) = invz * fy_;
+//         jacobian_uv_ksai(1, 5) = -y * invz_2 * fy_;
+
+//         Eigen::Matrix<float, 1, 2> jacobian_pixel_uv;
+
+//         jacobian_pixel_uv(0, 0) = (getPixelValue(u + 1, v) - getPixelValue(u - 1, v)) / 2;
+//         jacobian_pixel_uv(0, 1) = (getPixelValue(u, v + 1) - getPixelValue(u, v - 1)) / 2;
+
+//         _jacobianOplusXi = jacobian_pixel_uv * jacobian_uv_ksai;
+//     }
+
+//     // dummy read and write functions because we don't care...
+//     virtual bool read(std::istream &in) {}
+//     virtual bool write(std::ostream &out) const {}
+
+// protected:
+//     // get a gray scale value from reference image (bilinear interpolated)
+//     inline float getPixelValue(float x, float y)
+//     {
+//         uchar *data = &image_->data[int(y) * image_->step + int(x)];
+//         float xx = x - floor(x);
+//         float yy = y - floor(y);
+//         return float(
+//             (1 - xx) * (1 - yy) * data[0] +
+//             xx * (1 - yy) * data[1] +
+//             (1 - xx) * yy * data[image_->step] +
+//             xx * yy * data[image_->step + 1]);
+//     }
+
+// public:
+//     Eigen::Vector3f x_world_;                 // 3D point in world frame
+//     float cx_ = 0, cy_ = 0, fx_ = 0, fy_ = 0; // Camera intrinsics
+//     cv::Mat *image_ = nullptr;                // reference image
+// };
 
 // 直接法估计位姿
 // 输入：测量值（空间点的灰度），新的灰度图，相机内参； 输出：相机位姿
 // 返回：true为成功，false失败
-bool poseEstimationDirect(const vector<Measurement> &measurements, cv::Mat *gray, Eigen::Matrix3f &intrinsics, Eigen::Isometry3d &Tcw);
-
-// project a 3d point into an image plane, the error is photometric error
-// an unary edge with one vertex SE3Expmap (the pose of camera)
-class EdgeSE3ProjectDirect : public BaseUnaryEdge<1, double, VertexSE3Expmap>
-{
-public:
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-
-    EdgeSE3ProjectDirect() {}
-
-    EdgeSE3ProjectDirect(Eigen::Vector3d point, float fx, float fy, float cx, float cy, cv::Mat *image)
-        : x_world_(point), fx_(fx), fy_(fy), cx_(cx), cy_(cy), image_(image)
-    {
-    }
-
-    virtual void computeError()
-    {
-        const VertexSE3Expmap *v = static_cast<const VertexSE3Expmap *>(_vertices[0]);
-        Eigen::Vector3d x_local = v->estimate().map(x_world_);
-        float x = x_local[0] * fx_ / x_local[2] + cx_;
-        float y = x_local[1] * fy_ / x_local[2] + cy_;
-        // check x,y is in the image
-        if (x - 4 < 0 || (x + 4) > image_->cols || (y - 4) < 0 || (y + 4) > image_->rows)
-        {
-            _error(0, 0) = 0.0;
-            this->setLevel(1);
-        }
-        else
-        {
-            _error(0, 0) = getPixelValue(x, y) - _measurement;
-        }
-    }
-
-    // plus in manifold
-    virtual void linearizeOplus()
-    {
-        if (level() == 1)
-        {
-            _jacobianOplusXi = Eigen::Matrix<double, 1, 6>::Zero();
-            return;
-        }
-        VertexSE3Expmap *vtx = static_cast<VertexSE3Expmap *>(_vertices[0]);
-        Eigen::Vector3d xyz_trans = vtx->estimate().map(x_world_); // q in book
-
-        double x = xyz_trans[0];
-        double y = xyz_trans[1];
-        double invz = 1.0 / xyz_trans[2];
-        double invz_2 = invz * invz;
-
-        float u = x * fx_ * invz + cx_;
-        float v = y * fy_ * invz + cy_;
-
-        // jacobian from se3 to u,v
-        // NOTE that in g2o the Lie algebra is (\omega, \epsilon), where \omega is so(3) and \epsilon the translation
-        Eigen::Matrix<double, 2, 6> jacobian_uv_ksai;
-
-        jacobian_uv_ksai(0, 0) = -x * y * invz_2 * fx_;
-        jacobian_uv_ksai(0, 1) = (1 + (x * x * invz_2)) * fx_;
-        jacobian_uv_ksai(0, 2) = -y * invz * fx_;
-        jacobian_uv_ksai(0, 3) = invz * fx_;
-        jacobian_uv_ksai(0, 4) = 0;
-        jacobian_uv_ksai(0, 5) = -x * invz_2 * fx_;
-
-        jacobian_uv_ksai(1, 0) = -(1 + y * y * invz_2) * fy_;
-        jacobian_uv_ksai(1, 1) = x * y * invz_2 * fy_;
-        jacobian_uv_ksai(1, 2) = x * invz * fy_;
-        jacobian_uv_ksai(1, 3) = 0;
-        jacobian_uv_ksai(1, 4) = invz * fy_;
-        jacobian_uv_ksai(1, 5) = -y * invz_2 * fy_;
-
-        Eigen::Matrix<double, 1, 2> jacobian_pixel_uv;
-
-        jacobian_pixel_uv(0, 0) = (getPixelValue(u + 1, v) - getPixelValue(u - 1, v)) / 2;
-        jacobian_pixel_uv(0, 1) = (getPixelValue(u, v + 1) - getPixelValue(u, v - 1)) / 2;
-
-        _jacobianOplusXi = jacobian_pixel_uv * jacobian_uv_ksai;
-    }
-
-    // dummy read and write functions because we don't care...
-    virtual bool read(std::istream &in) {}
-    virtual bool write(std::ostream &out) const {}
-
-protected:
-    // get a gray scale value from reference image (bilinear interpolated)
-    inline float getPixelValue(float x, float y)
-    {
-        uchar *data = &image_->data[int(y) * image_->step + int(x)];
-        float xx = x - floor(x);
-        float yy = y - floor(y);
-        return float(
-            (1 - xx) * (1 - yy) * data[0] +
-            xx * (1 - yy) * data[1] +
-            (1 - xx) * yy * data[image_->step] +
-            xx * yy * data[image_->step + 1]);
-    }
-
-public:
-    Eigen::Vector3d x_world_;                 // 3D point in world frame
-    float cx_ = 0, cy_ = 0, fx_ = 0, fy_ = 0; // Camera intrinsics
-    cv::Mat *image_ = nullptr;                // reference image
-};
-
-bool poseEstimationDirect(const vector<Measurement> &measurements, cv::Mat *gray, Eigen::Matrix3f &K, Eigen::Isometry3d &Tcw)
+bool poseEstimationDirect(const vector<Measurement> &measurements, Frame &CurrentFrame, Eigen::Isometry3f &Tcw)
 {
     // 初始化g2o
     typedef g2o::BlockSolver<g2o::BlockSolverTraits<6, 1>> DirectBlock; // 求解的向量是6＊1的
     DirectBlock::LinearSolverType *linearSolver = new g2o::LinearSolverDense<DirectBlock::PoseMatrixType>();
-    DirectBlock *solver_ptr = new DirectBlock(std::unique_ptr<DirectBlock::LinearSolverType>(linearSolver));
+    DirectBlock *solver_ptr = new DirectBlock(linearSolver);
     // g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton( solver_ptr ); // G-N
-    g2o::OptimizationAlgorithmLevenberg *solver = new g2o::OptimizationAlgorithmLevenberg(std::unique_ptr<DirectBlock>(solver_ptr)); // L-M
+    g2o::OptimizationAlgorithmLevenberg *solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr); // L-M
     g2o::SparseOptimizer optimizer;
     optimizer.setAlgorithm(solver);
     optimizer.setVerbose(true);
 
     g2o::VertexSE3Expmap *pose = new g2o::VertexSE3Expmap();
-    pose->setEstimate(g2o::SE3Quat(Tcw.rotation(), Tcw.translation()));
+    pose->setEstimate(g2o::SE3Quat(g2o::SE3Quat(Tcw.unit_quaternion().cast<double>(), Tcw.translation().cast<double>())));
     pose->setId(0);
     optimizer.addVertex(pose);
 
-    // 添加边
-    int id = 1;
-    for (Measurement m : measurements)
-    {
-        EdgeSE3ProjectDirect *edge = new EdgeSE3ProjectDirect(
-            m.pos_world,
-            K(0, 0), K(1, 1), K(0, 2), K(1, 2), gray);
-        edge->setVertex(0, pose);
-        edge->setMeasurement(m.grayscale);
-        edge->setInformation(Eigen::Matrix<double, 1, 1>::Identity());
-        edge->setId(id++);
-        optimizer.addEdge(edge);
-    }
-    cout << "edges in graph: " << optimizer.edges().size() << endl;
-    optimizer.initializeOptimization();
-    optimizer.optimize(30);
-    Tcw = pose->estimate();
+    // // 添加边
+    // int id = 1;
+    // for (Measurement m : measurements)
+    // {
+    //     cv::Mat *img = &CurrentFrame.mvImagePyramid[0];
+    //     float fx = CurrentFrame.mpCamera->getParameter(0);
+    //     float fy = CurrentFrame.mpCamera->getParameter(1);
+    //     float cx = CurrentFrame.mpCamera->getParameter(2);
+    //     float cy = CurrentFrame.mpCamera->getParameter(3);
+    //     EdgeSE3ProjectDirect *edge = new EdgeSE3ProjectDirect(m.pos_world, fx, fy, cx, cy, img);
+    //     edge->setVertex(0, pose);
+    //     edge->setMeasurement(m.grayscale);
+    //     edge->setInformation(Eigen::Matrix<float, 1, 1>::Identity());
+    //     edge->setId(id++);
+    //     optimizer.addEdge(edge);
+    // }
+    // cout << "edges in graph: " << optimizer.edges().size() << endl;
+    // optimizer.initializeOptimization();
+    // optimizer.optimize(30);
+    // Tcw = pose->estimate();
 
     return true;
 }
+
 bool Tracking::TrackWithSparseAlignment(bool bTrackLastKF)
 {
     // Last frame = reference frame
@@ -4313,31 +4315,37 @@ bool Tracking::TrackWithSparseAlignment(bool bTrackLastKF)
     vector<Measurement> measurements;
     for (int i = 0; i < mLastFrame.N; i++)
     {
-        MapPoint *pMP = LastFrame.mvpMapPoints[i];
+        MapPoint *pMP = mLastFrame.mvpMapPoints[i];
         if (pMP && mLastFrame.mvpMapPoints[i]->isBad() == false &&
             mLastFrame.mvbOutlier[i] == false)
         {
             // Get 3D point (in last frame plane) from last frame
             Eigen::Vector3f x3Dw = pMP->GetWorldPos();
-            const Eigen::Vector3f Trw = mLastFrame.mTcw;
-            Eigen::Vector3f x3Dr = Trw * x3Dw; // Transform to last frame's plane
+            const Sophus::SE3f Trw = mLastFrame.GetPose(); // will return mTcw
+            Eigen::Vector3f x3Dc = Trw * x3Dw; // Transform to last frame's plane
             // Get 2D gray scale pixel value in last frame
             // get projected 2D coordinate
-            Eigen::Vector2f uv = mLastFrame.mpCamera->project(x3Dr);
+            Eigen::Vector2f uv = mLastFrame.mpCamera->project(x3Dc);
             if (uv(0) < mLastFrame.mnMinX || uv(0) > mLastFrame.mnMaxX)
                 continue;
             if (uv(1) < mLastFrame.mnMinY || uv(1) > mLastFrame.mnMaxY)
                 continue;
             // get pixel value
             const cv::Mat &lastImg = mLastFrame.mvImagePyramid[0];
-            float grayscale = float(gray.ptr<uchar>(cvRound(uv(1)))[cvRound(uv(0))]);
-            measurements.push_back(Measurement(p3d, grayscale));
+            float grayscale = float(lastImg.ptr<uchar>(cvRound(uv(1)))[cvRound(uv(0))]);
+            measurements.push_back(Measurement(x3Dc, grayscale));
         }
     }
     // chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
-    // TODO: fill the K, init Tcw as I
-    poseEstimationDirect(measurements, &mCurrentFrame.mvImagePyramid[0], K, Tcw);
+            // SE3f T_cur_from_ref(cur_frame->mTcw * ref_frame_->mTcw.inverse());
+
+    Eigen::Isometry3f Tcw = Eigen::Isometry3f::Identity();
+    poseEstimationDirect(measurements, mCurrentFrame, Tcw);
+
+            // SE3f T_cur_from_ref(cur_frame->mTcw * ref_frame_->mTcw.inverse());
+
     // chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
     // chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
+    // TODO: save the Tcw back to current frame
 }
 } // namespace ORB_SLAM
