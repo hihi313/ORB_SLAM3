@@ -4253,7 +4253,7 @@ struct Measurement
 // 直接法估计位姿
 // 输入：测量值（空间点的灰度），新的灰度图，相机内参； 输出：相机位姿
 // 返回：true为成功，false失败
-bool poseEstimationDirect(const vector<Measurement> &measurements, Frame &CurrentFrame, Eigen::Isometry3f &Tcw)
+bool poseEstimationDirect(const vector<Measurement> &measurements, Frame &CurrentFrame)
 {
     // 初始化g2o
     typedef g2o::BlockSolver<g2o::BlockSolverTraits<6, 1>> DirectBlock; // 求解的向量是6＊1的
@@ -4266,11 +4266,12 @@ bool poseEstimationDirect(const vector<Measurement> &measurements, Frame &Curren
     optimizer.setVerbose(true);
 
     g2o::VertexSE3Expmap *pose = new g2o::VertexSE3Expmap();
+    Sophus::SE3f Tcw = CurrentFrame.GetPose();
     pose->setEstimate(g2o::SE3Quat(g2o::SE3Quat(Tcw.unit_quaternion().cast<double>(), Tcw.translation().cast<double>())));
     pose->setId(0);
     optimizer.addVertex(pose);
 
-    // // 添加边
+    // 添加边
     // int id = 1;
     // for (Measurement m : measurements)
     // {
@@ -4289,7 +4290,13 @@ bool poseEstimationDirect(const vector<Measurement> &measurements, Frame &Curren
     // cout << "edges in graph: " << optimizer.edges().size() << endl;
     // optimizer.initializeOptimization();
     // optimizer.optimize(30);
-    // Tcw = pose->estimate();
+    // // Tcw = pose->estimate();
+    // g2o::VertexSE3Expmap *vSE3_recov = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(0));
+    // g2o::SE3Quat SE3quat_recov = vSE3_recov->estimate();
+    // Sophus::SE3<float> pose(
+    //     SE3quat_recov.rotation().cast<float>(),
+    //     SE3quat_recov.translation().cast<float>());
+    // CurrentFrame.SetPose(pose);
 
     return true;
 }
@@ -4322,10 +4329,10 @@ bool Tracking::TrackWithSparseAlignment(bool bTrackLastKF)
             // Get 3D point (in last frame plane) from last frame
             Eigen::Vector3f x3Dw = pMP->GetWorldPos();
             const Sophus::SE3f Trw = mLastFrame.GetPose(); // will return mTcw
-            Eigen::Vector3f x3Dc = Trw * x3Dw; // Transform to last frame's plane
+            Eigen::Vector3f x3Dr = Trw * x3Dw; // Transform to last frame's plane
             // Get 2D gray scale pixel value in last frame
             // get projected 2D coordinate
-            Eigen::Vector2f uv = mLastFrame.mpCamera->project(x3Dc);
+            Eigen::Vector2f uv = mLastFrame.mpCamera->project(x3Dr);
             if (uv(0) < mLastFrame.mnMinX || uv(0) > mLastFrame.mnMaxX)
                 continue;
             if (uv(1) < mLastFrame.mnMinY || uv(1) > mLastFrame.mnMaxY)
@@ -4333,17 +4340,11 @@ bool Tracking::TrackWithSparseAlignment(bool bTrackLastKF)
             // get pixel value
             const cv::Mat &lastImg = mLastFrame.mvImagePyramid[0];
             float grayscale = float(lastImg.ptr<uchar>(cvRound(uv(1)))[cvRound(uv(0))]);
-            measurements.push_back(Measurement(x3Dc, grayscale));
+            measurements.push_back(Measurement(x3Dr, grayscale));
         }
     }
     // chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
-            // SE3f T_cur_from_ref(cur_frame->mTcw * ref_frame_->mTcw.inverse());
-
-    Eigen::Isometry3f Tcw = Eigen::Isometry3f::Identity();
-    poseEstimationDirect(measurements, mCurrentFrame, Tcw);
-
-            // SE3f T_cur_from_ref(cur_frame->mTcw * ref_frame_->mTcw.inverse());
-
+    poseEstimationDirect(measurements, mCurrentFrame); // CurrentFrame's pose should have initialized
     // chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
     // chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
     // TODO: save the Tcw back to current frame
