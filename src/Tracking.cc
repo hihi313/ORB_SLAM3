@@ -4129,8 +4129,8 @@ void Tracking::Release()
 // 一次测量的值，包括一个世界坐标系下三维点与一个灰度值
 struct Measurement
 {
-    Measurement(Eigen::Vector3f p, float g) : pos_world(p), grayscale(g) {}
-    Eigen::Vector3f pos_world;
+    Measurement(Eigen::Vector3d p, float g) : pos_world(p), grayscale(g) {}
+    Eigen::Vector3d pos_world;
     float grayscale;
 };
 
@@ -4151,39 +4151,39 @@ struct Measurement
 
 // project a 3d point into an image plane, the error is photometric error
 // an unary edge with one vertex SE3Expmap (the pose of camera)
-// class EdgeSE3ProjectDirect : public g2o::BaseUnaryEdge<1, float, g2o::VertexSE3Expmap>
-// {
-// public:
-//     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+class EdgeSE3ProjectDirect : public g2o::BaseUnaryEdge<1, float, g2o::VertexSE3Expmap>
+{
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-//     EdgeSE3ProjectDirect() {}
+    EdgeSE3ProjectDirect() {}
 
-//     EdgeSE3ProjectDirect(Eigen::Vector3f point, float fx, float fy, float cx, float cy, cv::Mat *image)
-//         : x_world_(point), fx_(fx), fy_(fy), cx_(cx), cy_(cy), image_(image)
-//     {
-//     }
+    EdgeSE3ProjectDirect(Eigen::Vector3d point, float fx, float fy, float cx, float cy, Frame *frame)
+        : x_world_(point), fx_(fx), fy_(fy), cx_(cx), cy_(cy), frame_(frame)
+    {
+        image_ = &(frame_->mvImagePyramid[0]);
+    }
 
-//     virtual void computeError()
-//     {
-//         const g2o::VertexSE3Expmap *v = static_cast<const g2o::VertexSE3Expmap *>(_vertices[0]);
-//         Eigen::Vector3f x_local = v->estimate().map(x_world_);
-//         float x = x_local[0] * fx_ / x_local[2] + cx_;
-//         float y = x_local[1] * fy_ / x_local[2] + cy_;
-//         // check x,y is in the image
-//         if (x - 4 < 0 || (x + 4) > image_->cols || (y - 4) < 0 || (y + 4) > image_->rows)
-//         {
-//             _error(0, 0) = 0.0;
-//             this->setLevel(1);
-//         }
-//         else
-//         {
-//             _error(0, 0) = getPixelValue(x, y) - _measurement;
-//         }
-//     }
+    virtual void computeError()
+    {
+        const g2o::VertexSE3Expmap *v = static_cast<const g2o::VertexSE3Expmap *>(_vertices[0]);
+        Eigen::Vector3d x_local = v->estimate().map(x_world_);
+        // get projected 2D coordinate
+        Eigen::Vector2d uv = frame_->mpCamera->project(x_local);
+        if (uv(0) < frame_->mnMinX || uv(0) > frame_->mnMaxX)
+        {
+            _error(0, 0) = 0.0;
+            this->setLevel(1);
+        }
+        if (uv(1) < frame_->mnMinY || uv(1) > frame_->mnMaxY)
+        {
+            _error(0, 0) = getPixelValue(uv(0), uv(1)) - _measurement;
+        }
+    }
 
 //     // plus in manifold
-//     virtual void linearizeOplus()
-//     {
+    virtual void linearizeOplus()
+    {
 //         if (level() == 1)
 //         {
 //             _jacobianOplusXi = Eigen::Matrix<float, 1, 6>::Zero();
@@ -4224,31 +4224,32 @@ struct Measurement
 //         jacobian_pixel_uv(0, 1) = (getPixelValue(u, v + 1) - getPixelValue(u, v - 1)) / 2;
 
 //         _jacobianOplusXi = jacobian_pixel_uv * jacobian_uv_ksai;
-//     }
+    }
 
 //     // dummy read and write functions because we don't care...
-//     virtual bool read(std::istream &in) {}
-//     virtual bool write(std::ostream &out) const {}
+    virtual bool read(std::istream &in) {}
+    virtual bool write(std::ostream &out) const {}
 
-// protected:
-//     // get a gray scale value from reference image (bilinear interpolated)
-//     inline float getPixelValue(float x, float y)
-//     {
-//         uchar *data = &image_->data[int(y) * image_->step + int(x)];
-//         float xx = x - floor(x);
-//         float yy = y - floor(y);
-//         return float(
-//             (1 - xx) * (1 - yy) * data[0] +
-//             xx * (1 - yy) * data[1] +
-//             (1 - xx) * yy * data[image_->step] +
-//             xx * yy * data[image_->step + 1]);
-//     }
+protected:
+    // get a gray scale value from reference image (bilinear interpolated)
+    inline float getPixelValue(float x, float y)
+    {
+        uchar *data = &image_->data[int(y) * image_->step + int(x)];
+        float xx = x - floor(x);
+        float yy = y - floor(y);
+        return float(
+            (1 - xx) * (1 - yy) * data[0] +
+            xx * (1 - yy) * data[1] +
+            (1 - xx) * yy * data[image_->step] +
+            xx * yy * data[image_->step + 1]);
+    }
 
-// public:
-//     Eigen::Vector3f x_world_;                 // 3D point in world frame
-//     float cx_ = 0, cy_ = 0, fx_ = 0, fy_ = 0; // Camera intrinsics
-//     cv::Mat *image_ = nullptr;                // reference image
-// };
+public:
+    Eigen::Vector3d x_world_;                 // 3D point in world frame
+    float cx_ = 0, cy_ = 0, fx_ = 0, fy_ = 0; // Camera intrinsics
+    cv::Mat *image_ = nullptr;                // reference image
+    Frame *frame_;
+};
 
 // 直接法估计位姿
 // 输入：测量值（空间点的灰度），新的灰度图，相机内参； 输出：相机位姿
@@ -4272,31 +4273,29 @@ bool poseEstimationDirect(const vector<Measurement> &measurements, Frame &Curren
     optimizer.addVertex(pose);
 
     // 添加边
-    // int id = 1;
-    // for (Measurement m : measurements)
-    // {
-    //     cv::Mat *img = &CurrentFrame.mvImagePyramid[0];
-    //     float fx = CurrentFrame.mpCamera->getParameter(0);
-    //     float fy = CurrentFrame.mpCamera->getParameter(1);
-    //     float cx = CurrentFrame.mpCamera->getParameter(2);
-    //     float cy = CurrentFrame.mpCamera->getParameter(3);
-    //     EdgeSE3ProjectDirect *edge = new EdgeSE3ProjectDirect(m.pos_world, fx, fy, cx, cy, img);
-    //     edge->setVertex(0, pose);
-    //     edge->setMeasurement(m.grayscale);
-    //     edge->setInformation(Eigen::Matrix<float, 1, 1>::Identity());
-    //     edge->setId(id++);
-    //     optimizer.addEdge(edge);
-    // }
-    // cout << "edges in graph: " << optimizer.edges().size() << endl;
-    // optimizer.initializeOptimization();
-    // optimizer.optimize(30);
-    // // Tcw = pose->estimate();
-    // g2o::VertexSE3Expmap *vSE3_recov = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(0));
-    // g2o::SE3Quat SE3quat_recov = vSE3_recov->estimate();
-    // Sophus::SE3<float> pose(
-    //     SE3quat_recov.rotation().cast<float>(),
-    //     SE3quat_recov.translation().cast<float>());
-    // CurrentFrame.SetPose(pose);
+    int id = 1;
+    for (Measurement m : measurements)
+    {
+        float fx = CurrentFrame.mpCamera->getParameter(0);
+        float fy = CurrentFrame.mpCamera->getParameter(1);
+        float cx = CurrentFrame.mpCamera->getParameter(2);
+        float cy = CurrentFrame.mpCamera->getParameter(3);
+        EdgeSE3ProjectDirect *edge = new EdgeSE3ProjectDirect(m.pos_world, fx, fy, cx, cy, &CurrentFrame);
+        edge->setVertex(0, pose);
+        edge->setMeasurement(m.grayscale);
+        edge->setInformation(Eigen::Matrix<double, 1, 1>::Identity());
+        edge->setId(id++);
+        optimizer.addEdge(edge);
+    }
+    cout << "edges in graph: " << optimizer.edges().size() << endl;
+    optimizer.initializeOptimization();
+    optimizer.optimize(30);
+    g2o::VertexSE3Expmap *vSE3_recov = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(0));
+    g2o::SE3Quat SE3quat_recov = vSE3_recov->estimate();
+    Sophus::SE3<float> Tcw_recov(
+        SE3quat_recov.rotation().cast<float>(),
+        SE3quat_recov.translation().cast<float>());
+    CurrentFrame.SetPose(Tcw_recov);
 
     return true;
 }
@@ -4327,12 +4326,12 @@ bool Tracking::TrackWithSparseAlignment(bool bTrackLastKF)
             mLastFrame.mvbOutlier[i] == false)
         {
             // Get 3D point (in last frame plane) from last frame
-            Eigen::Vector3f x3Dw = pMP->GetWorldPos();
-            const Sophus::SE3f Trw = mLastFrame.GetPose(); // will return mTcw
-            Eigen::Vector3f x3Dr = Trw * x3Dw; // Transform to last frame's plane
+            Eigen::Vector3d x3Dw = pMP->GetWorldPos().cast<double>();
+            const Sophus::SE3d Trw = mLastFrame.GetPose().cast<double>(); // will return mTcw
+            Eigen::Vector3d x3Dr = Trw * x3Dw; // Transform to last frame's plane
             // Get 2D gray scale pixel value in last frame
             // get projected 2D coordinate
-            Eigen::Vector2f uv = mLastFrame.mpCamera->project(x3Dr);
+            Eigen::Vector2d uv = mLastFrame.mpCamera->project(x3Dr);
             if (uv(0) < mLastFrame.mnMinX || uv(0) > mLastFrame.mnMaxX)
                 continue;
             if (uv(1) < mLastFrame.mnMinY || uv(1) > mLastFrame.mnMaxY)
