@@ -4181,52 +4181,54 @@ public:
         }
     }
 
-//     // plus in manifold
-    virtual void linearizeOplus()
-    {
-//         if (level() == 1)
-//         {
-//             _jacobianOplusXi = Eigen::Matrix<float, 1, 6>::Zero();
-//             return;
-//         }
-//         g2o::VertexSE3Expmap *vtx = static_cast<g2o::VertexSE3Expmap *>(_vertices[0]);
-//         Eigen::Vector3f xyz_trans = vtx->estimate().map(x_world_); // q in book
+    // plus in manifold
+    // virtual void linearizeOplus()
+    // {
+    //     if (level() == 1)
+    //     {
+    //         _jacobianOplusXi = Eigen::Matrix<double, 1, 6>::Zero();
+    //         return;
+    //     }
+    //     g2o::VertexSE3Expmap *vtx = static_cast<g2o::VertexSE3Expmap *>(_vertices[0]);
+    //     Eigen::Vector3d xyz_trans = vtx->estimate().map(x_world_); // q in book
 
-//         float x = xyz_trans[0];
-//         float y = xyz_trans[1];
-//         float invz = 1.0 / xyz_trans[2];
-//         float invz_2 = invz * invz;
+    //     float x = xyz_trans[0];
+    //     float y = xyz_trans[1];
+    //     float invz = 1.0 / xyz_trans[2];
+    //     float invz_2 = invz * invz;
 
-//         float u = x * fx_ * invz + cx_;
-//         float v = y * fy_ * invz + cy_;
+    //     // get projected 2D coordinate
+    //     Eigen::Vector2d uv = frame_->mpCamera->project(xyz_trans);
+    //     float u = uv(0);
+    //     float v = uv(1);
 
-//         // jacobian from se3 to u,v
-//         // NOTE that in g2o the Lie algebra is (\omega, \epsilon), where \omega is so(3) and \epsilon the translation
-//         Eigen::Matrix<float, 2, 6> jacobian_uv_ksai;
+    //     // jacobian from se3 to u,v
+    //     // NOTE that in g2o the Lie algebra is (\omega, \epsilon), where \omega is so(3) and \epsilon the translation
+    //     Eigen::Matrix<double, 2, 6> jacobian_uv_ksai;
 
-//         jacobian_uv_ksai(0, 0) = -x * y * invz_2 * fx_;
-//         jacobian_uv_ksai(0, 1) = (1 + (x * x * invz_2)) * fx_;
-//         jacobian_uv_ksai(0, 2) = -y * invz * fx_;
-//         jacobian_uv_ksai(0, 3) = invz * fx_;
-//         jacobian_uv_ksai(0, 4) = 0;
-//         jacobian_uv_ksai(0, 5) = -x * invz_2 * fx_;
+    //     jacobian_uv_ksai(0, 0) = -x * y * invz_2 * fx_;
+    //     jacobian_uv_ksai(0, 1) = (1 + (x * x * invz_2)) * fx_;
+    //     jacobian_uv_ksai(0, 2) = -y * invz * fx_;
+    //     jacobian_uv_ksai(0, 3) = invz * fx_;
+    //     jacobian_uv_ksai(0, 4) = 0;
+    //     jacobian_uv_ksai(0, 5) = -x * invz_2 * fx_;
 
-//         jacobian_uv_ksai(1, 0) = -(1 + y * y * invz_2) * fy_;
-//         jacobian_uv_ksai(1, 1) = x * y * invz_2 * fy_;
-//         jacobian_uv_ksai(1, 2) = x * invz * fy_;
-//         jacobian_uv_ksai(1, 3) = 0;
-//         jacobian_uv_ksai(1, 4) = invz * fy_;
-//         jacobian_uv_ksai(1, 5) = -y * invz_2 * fy_;
+    //     jacobian_uv_ksai(1, 0) = -(1 + y * y * invz_2) * fy_;
+    //     jacobian_uv_ksai(1, 1) = x * y * invz_2 * fy_;
+    //     jacobian_uv_ksai(1, 2) = x * invz * fy_;
+    //     jacobian_uv_ksai(1, 3) = 0;
+    //     jacobian_uv_ksai(1, 4) = invz * fy_;
+    //     jacobian_uv_ksai(1, 5) = -y * invz_2 * fy_;
 
-//         Eigen::Matrix<float, 1, 2> jacobian_pixel_uv;
+    //     Eigen::Matrix<float, 1, 2> jacobian_pixel_uv;
 
-//         jacobian_pixel_uv(0, 0) = (getPixelValue(u + 1, v) - getPixelValue(u - 1, v)) / 2;
-//         jacobian_pixel_uv(0, 1) = (getPixelValue(u, v + 1) - getPixelValue(u, v - 1)) / 2;
+    //     jacobian_pixel_uv(0, 0) = (getPixelValue(u + 1, v) - getPixelValue(u - 1, v)) / 2;
+    //     jacobian_pixel_uv(0, 1) = (getPixelValue(u, v + 1) - getPixelValue(u, v - 1)) / 2;
 
-//         _jacobianOplusXi = jacobian_pixel_uv * jacobian_uv_ksai;
-    }
+    //     _jacobianOplusXi = jacobian_pixel_uv * jacobian_uv_ksai;
+    // }
 
-//     // dummy read and write functions because we don't care...
+    // dummy read and write functions because we don't care...
     virtual bool read(std::istream &in) {}
     virtual bool write(std::ostream &out) const {}
 
