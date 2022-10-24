@@ -6,9 +6,23 @@ IMG_TAG="1.1-ubuntu18.04"
 CTNR_NAME="orb-3-container"
 WORKDIR="/dpds"
 
-while getopts "i:t:br:e" opt
+VOLUME=""
+while getopts "bei:t:v:r:" opt
 do
   case $opt in
+    b) 
+        START="$(TZ=UTC0 printf '%(%s)T\n' '-1')" # `-1`  is the current time
+        
+        docker rmi $IMG_NAME
+        docker build --no-cache -t $IMG_NAME .
+        
+        # Pring elapsed time
+        ELAPSED=$(( $(TZ=UTC0 printf '%(%s)T\n' '-1') - START ))
+        TZ=UTC0 printf 'Build duration=%(%H:%M:%S)T\n' "$ELAPSED"
+        ;;
+    e)
+        docker exec -it --user=root $CTNR_NAME bash
+        ;;
     i)
         if [ "$OPTARG" == "my" ]
         then
@@ -23,15 +37,8 @@ do
     t)
         IMG_TAG="$OPTARG"
         ;;
-    b) 
-        START="$(TZ=UTC0 printf '%(%s)T\n' '-1')" # `-1`  is the current time
-        
-        docker rmi $IMG_NAME
-        docker build --no-cache -t $IMG_NAME .
-        
-        # Pring elapsed time
-        ELAPSED=$(( $(TZ=UTC0 printf '%(%s)T\n' '-1') - START ))
-        TZ=UTC0 printf 'Build duration=%(%H:%M:%S)T\n' "$ELAPSED"
+    v)
+        VOLUME="$OPTARG"
         ;;
     r)
         RM=""
@@ -55,7 +62,7 @@ do
         # --user="$(id -u):$(id -g)" \
 
         sudo xhost +local:root &&
-            docker run -it $RM $GPU $DISPLAY_VOLUME \
+            docker run -it $RM $GPU $DISPLAY_VOLUME -v"$VOLUME" \
                 -e QT_X11_NO_MITSHM=1 \
                 -p 8087:8087 \
                 -v /dev:/dev:ro \
@@ -71,9 +78,6 @@ do
 
         # Disable tracing
         set +x
-        ;;
-    e)
-        docker exec -it --user=root $CTNR_NAME bash
         ;;
     \?) 
         echo "Invalid option -$OPTARG" >&2
