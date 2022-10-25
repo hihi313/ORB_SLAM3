@@ -1951,7 +1951,9 @@ void Tracking::Track()
                 {
                     Verbose::PrintMess("TRACK: Track with motion model", Verbose::VERBOSITY_DEBUG);
                     // TrackWithSparseAlignment
-                    bOK = TrackWithMotionModel();
+                    bOK = TrackWithSparseAlignment();
+                    if(!bOK)
+                        bOK = TrackWithMotionModel();
                     if(!bOK)
                         bOK = TrackReferenceKeyFrame();
                 }
@@ -2051,7 +2053,9 @@ void Tracking::Track()
                     if(mbVelocity)
                     {
                         // TrackWithSparseAlignment
-                        bOK = TrackWithMotionModel();
+                        bOK = TrackWithSparseAlignment();
+                        if (!bOK)
+                            bOK = TrackWithMotionModel();
                     }
                     else
                     {
@@ -4170,15 +4174,7 @@ public:
         Eigen::Vector3d x_local = v->estimate().map(x_world_);
         // get projected 2D coordinate
         Eigen::Vector2d uv = frame_->mpCamera->project(x_local);
-        if (uv(0) < frame_->mnMinX || uv(0) > frame_->mnMaxX)
-        {
-            _error(0, 0) = 0.0;
-            this->setLevel(1);
-        }
-        if (uv(1) < frame_->mnMinY || uv(1) > frame_->mnMaxY)
-        {
-            _error(0, 0) = getPixelValue(uv(0), uv(1)) - _measurement;
-        }
+        _error(0, 0) = getPixelValue(uv(0), uv(1)) - _measurement;
     }
 
     // plus in manifold
@@ -4255,9 +4251,12 @@ public:
 
 // 直接法估计位姿
 // 输入：测量值（空间点的灰度），新的灰度图，相机内参； 输出：相机位姿
-// 返回：true为成功，false失败
+// 返回：内点数目
 bool poseEstimationDirect(const vector<Measurement> &measurements, Frame &CurrentFrame)
 {
+    // 自由度为2的卡方分布，显著性水平为0.05，对应的临界阈值5.991
+    // 可以理解为卡方值高于5.991 95%的几率维外点
+    const float deltaMono = sqrt(5.991);
     // 初始化g2o
     typedef g2o::BlockSolver<g2o::BlockSolverTraits<6, 1>> DirectBlock; // 求解的向量是6＊1的
     DirectBlock::LinearSolverType *linearSolver = new g2o::LinearSolverDense<DirectBlock::PoseMatrixType>();
@@ -4278,6 +4277,7 @@ bool poseEstimationDirect(const vector<Measurement> &measurements, Frame &Curren
     int id = 1;
     for (Measurement m : measurements)
     {
+        // Instritic Currently not used
         float fx = CurrentFrame.mpCamera->getParameter(0);
         float fy = CurrentFrame.mpCamera->getParameter(1);
         float cx = CurrentFrame.mpCamera->getParameter(2);
@@ -4286,10 +4286,17 @@ bool poseEstimationDirect(const vector<Measurement> &measurements, Frame &Curren
         edge->setVertex(0, pose);
         edge->setMeasurement(m.grayscale);
         edge->setInformation(Eigen::Matrix<double, 1, 1>::Identity());
+        // 鲁棒核函数
+        g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
+        edge->setRobustKernel(rk);
+        rk->setDelta(deltaMono);
         edge->setId(id++);
         optimizer.addEdge(edge);
     }
+#ifndef NDEBUG
     cout << "edges in graph: " << optimizer.edges().size() << endl;
+    // optimizer.setVerbose(true);
+#endif
     optimizer.initializeOptimization();
     optimizer.optimize(30);
     g2o::VertexSE3Expmap *vSE3_recov = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(0));
@@ -4302,7 +4309,7 @@ bool poseEstimationDirect(const vector<Measurement> &measurements, Frame &Curren
     return true;
 }
 
-bool Tracking::TrackWithSparseAlignment(bool bTrackLastKF)
+bool Tracking::TrackWithSparseAlignment()
 {
     // Last frame = reference frame
     // Check last frame 3D point inliner number
@@ -4345,9 +4352,10 @@ bool Tracking::TrackWithSparseAlignment(bool bTrackLastKF)
         }
     }
     // chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
-    poseEstimationDirect(measurements, mCurrentFrame); // CurrentFrame's pose should have initialized
+    int status = poseEstimationDirect(measurements, mCurrentFrame); // CurrentFrame's pose should have initialized
     // chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
     // chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
-    // TODO: save the Tcw back to current frame
+
+    return status > 0;
 }
 } // namespace ORB_SLAM

@@ -36,6 +36,6 @@ echo "Configuring and building ORB_SLAM3 ..."
 
 mkdir build
 cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make VERBOSE=1
-# make -j$(nproc)
+cmake .. -DCMAKE_BUILD_TYPE=Debug -GNinja
+# make VERBOSE=1
+ninja

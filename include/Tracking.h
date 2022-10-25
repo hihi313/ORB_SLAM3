@@ -356,6 +356,7 @@ protected:
     Sophus::SE3f mTlr;
 
     void newParameterLoader(Settings* settings);
+    bool TrackWithSparseAlignment();
 
 #ifdef REGISTER_LOOP
     bool Stop();
@@ -366,7 +367,6 @@ protected:
     std::mutex mMutexStop;
 #endif
 
-    bool TrackWithSparseAlignment(bool bTrackLastKF);
 
 public:
     cv::Mat mImRight;
