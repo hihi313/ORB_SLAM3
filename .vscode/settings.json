@@ -1,0 +1,22 @@
+{
+    // "cmake.debugConfig":{
+    //     "miDebuggerPath":"/usr/share/gdb",
+    // },
+    "files.associations": {
+        "vector": "cpp",
+        "chrono": "cpp",
+        "*.ipp": "cpp",
+        "array": "cpp",
+        "deque": "cpp",
+        "list": "cpp",
+        "string": "cpp",
+        "unordered_map": "cpp",
+        "unordered_set": "cpp",
+        "string_view": "cpp",
+        "initializer_list": "cpp",
+        "valarray": "cpp"
+    },
+    "editor.rulers": [
+    80,120
+    ]
+}
