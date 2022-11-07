@@ -4149,6 +4149,7 @@ public:
     EdgeSE3ProjectDirect(Eigen::Vector3d point, Frame *frame)
         : x_world_(point), frame_(frame)
     {
+        // cache the image (pointer)
         image_ = &(frame_->mvImagePyramid[0]);
     }
 
@@ -4166,12 +4167,12 @@ public:
 
 protected:
     // get a gray scale value from reference image (bilinear interpolated)
-    inline float getPixelValue(float x, float y)
+    inline double getPixelValue(double x, double y)
     {
         uchar *data = &image_->data[int(y) * image_->step + int(x)];
-        float xx = x - floor(x);
-        float yy = y - floor(y);
-        return float(
+        double xx = x - floor(x);
+        double yy = y - floor(y);
+        return double(
             (1 - xx) * (1 - yy) * data[0] +
             xx * (1 - yy) * data[1] +
             (1 - xx) * yy * data[image_->step] +
@@ -4180,10 +4181,12 @@ protected:
 };
 
 /// @brief 直接法估计位姿
-/// @param LastFrame 
-/// @param CurrentFrame 
+/// should't modify any map/key points in any frame, they should manage by original ORB-SLAM3
+/// @param LastFrame
+/// @param CurrentFrame
+/// @param points map points in last frame Union both frames
 /// @return 内点数目
-bool PoseOptimizationDirect(Frame *LastFrame, Frame *CurrentFrame)
+vector<int> PoseOptimizationDirect(Frame *LastFrame, Frame *CurrentFrame, vector<MapPoint *> *points)
 {
     // Step 1：构造g2o优化器
     g2o::SparseOptimizer optimizer;
@@ -4211,14 +4214,14 @@ bool PoseOptimizationDirect(Frame *LastFrame, Frame *CurrentFrame)
     optimizer.addVertex(pose);
 
     // 当前帧的特征点数量
-    const int N = pFrame->N;
+    const int N = CurrentFrame->N;
 
     // 存放单目边
     vector<EdgeSE3ProjectDirect *> vpEdgesMono;
-    // Measurements of reference fram's pixel value/Intensity
-    vector<Measurement> measurements;
+    // 边对应3D点的id
+    vector<int> vnIndexEdgeMono;
     vpEdgesMono.reserve(N);
-    measurements.reserve(N);
+    vnIndexEdgeMono.reserve(N);
 
     // 自由度为2的卡方分布，显著性水平为0.05，对应的临界阈值5.991
     // 可以理解为卡方值高于5.991 95%的几率维外点
@@ -4230,7 +4233,8 @@ bool PoseOptimizationDirect(Frame *LastFrame, Frame *CurrentFrame)
 
     // Image of last frame
     const cv::Mat &lastImg = LastFrame->mvImagePyramid[0];
-    // 遍历last frame中的所有地图点
+    // add edge, 遍历last frame中的所有地图点
+    id = 0;
     for (int i = 0; i < N; i++)
     {
         MapPoint *pMP = LastFrame->mvpMapPoints[i];
@@ -4243,83 +4247,56 @@ bool PoseOptimizationDirect(Frame *LastFrame, Frame *CurrentFrame)
             && CurrentFrame->mvuRight[i] < 0)
         {
             nInitialCorrespondences++;
-            // ?, copy from Optimizer::PoseOptimization(Frame *pFrame)
-            pFrame->mvbOutlier[i] = false;
 
             // add edge
             EdgeSE3ProjectDirect *edge = new EdgeSE3ProjectDirect(
                 pMP->GetWorldPos().cast<double>(), &CurrentFrame);
             edge->setVertex(0, pose);
-            // pixel intensity from last frame
+            // pixel intensity from last frame, the observation/ground truth of photometric error
             edge->setMeasurement(double(lastImg.ptr<uchar>(cvRound(uv(1)))[cvRound(uv(0))]));
             edge->setInformation(Eigen::Matrix<double, 1, 1>::Identity());
-        // 鲁棒核函数
-        g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
-        edge->setRobustKernel(rk);
-        rk->setDelta(deltaMono);
-            // Get the observation/ground truth of photometric error
+            edge->setId(id++);
 
-            // Photometric error
+            // 鲁棒核函数
+            g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
+            rk->setDelta(deltaMono);
+            edge->setRobustKernel(rk);
+
+            optimizer.addEdge(edge);
+
+            vpEdgesMono.push_back(edge);
+            vnIndexEdgeMono.push_back(i);
         }
     }
 
-//------------------------
-    // Get measurements from last frame
-    for (int i = 0; i < mLastFrame.N; i++)
+    // 如果没有足够的匹配点,那么就只好放弃了
+    // cout << "PO: vnIndexEdgeMono.size() = " << vnIndexEdgeMono.size() << "   vnIndexEdgeRight.size() = " << vnIndexEdgeRight.size() << endl;
+    if (nInitialCorrespondences < 3)
     {
-        MapPoint *pMP = mLastFrame.mvpMapPoints[i];
-        if (pMP && mLastFrame.mvpMapPoints[i]->isBad() == false &&
-            mLastFrame.mvbOutlier[i] == false)
-        {
-            // Get 3D point (in last frame plane) from last frame
-            Eigen::Vector3d x3Dw = pMP->GetWorldPos().cast<double>();
-            const Sophus::SE3d Trw = mLastFrame.GetPose().cast<double>(); // will return mTcw
-            Eigen::Vector3d x3Dr = Trw * x3Dw; // Transform to last frame's plane
-            // Get 2D gray scale pixel value in last frame
-            // get projected 2D coordinate
-            Eigen::Vector2d uv = mLastFrame.mpCamera->project(x3Dr);
-            if (uv(0) < mLastFrame.mnMinX || uv(0) > mLastFrame.mnMaxX)
-                continue;
-            if (uv(1) < mLastFrame.mnMinY || uv(1) > mLastFrame.mnMaxY)
-                continue;
-            // get pixel value
-            
-            measurements.push_back(Measurement(x3Dr, grayscale));
-        }
-    }
-
-    // 添加边
-    int id = 1;
-    for (Measurement m : measurements)
-    {
-        // Instritic Currently not used
-        float fx = CurrentFrame.mpCamera->getParameter(0);
-        float fy = CurrentFrame.mpCamera->getParameter(1);
-        float cx = CurrentFrame.mpCamera->getParameter(2);
-        float cy = CurrentFrame.mpCamera->getParameter(3);
-        edge->setInformation(Eigen::Matrix<double, 1, 1>::Identity());
-        edge->setId(id++);
-        optimizer.addEdge(edge);
+#ifndef NDEBUG
+        printf("last frame has no enough inliner map points\n");
+#endif
+        return 0;
     }
 #ifndef NDEBUG
-    cout << "edges in graph: " << optimizer.edges().size() << endl;
+    printf("edges in graph: %d\n", optimizer.edges().size());
     // optimizer.setVerbose(true);
 #endif
+
     // We perform 4 optimizations, after each optimization we classify observation as inlier/outlier
     // At the next optimization, outliers are not included, but at the end they can be classified as inliers again.
     // Step 4：开始优化，总共优化四次，每次优化迭代10次,每次优化后，将观测分为outlier和inlier，outlier不参与下次优化
     // 由于每次优化后是对所有的观测进行outlier和inlier判别，因此之前被判别为outlier有可能变成inlier，反之亦然
     // 基于卡方检验计算出的阈值（假设测量有一个像素的偏差）
-    const float chi2Mono[4] = {5.991, 5.991, 5.991, 5.991};   // 单目
-    const int its[4] = {10, 10, 10, 10};                      // 四次迭代，每次迭代的次数
+    const float chi2Mono[4] = {5.991, 5.991, 5.991, 5.991}; // 单目
+    const int its[4] = {10, 10, 10, 10};                    // 四次迭代，每次迭代的次数
 
-    // bad 的地图点个数
-    int nBad = 0;
     // 一共进行四次优化，每次会剔除外点
     for (size_t it = 0; it < 4; it++)
     {
-        Tcw = pFrame->GetPose();
-        vSE3->setEstimate(g2o::SE3Quat(Tcw.unit_quaternion().cast<double>(), Tcw.translation().cast<double>()));
+        // Set again? & reset before each optimization ?
+        Tcw = CurrentFrame->GetPose();
+        pose->setEstimate(g2o::SE3Quat(Tcw.unit_quaternion().cast<double>(), Tcw.translation().cast<double>()));
         // 其实就是初始化优化器,这里的参数0就算是不填写,默认也是0,也就是只对level为0的边进行优化
         optimizer.initializeOptimization(0);
         // 开始优化，优化10次
@@ -4329,52 +4306,60 @@ bool PoseOptimizationDirect(Frame *LastFrame, Frame *CurrentFrame)
         // 优化结束,开始遍历参与优化的每一条误差边(单目或双相机的相机1)
         for (size_t i = 0, iend = vpEdgesMono.size(); i < iend; i++)
         {
-            ORB_SLAM3::EdgeSE3ProjectXYZOnlyPose *e = vpEdgesMono[i];
+            EdgeSE3ProjectDirect *edge = vpEdgesMono[i];
 
-            const size_t idx = vnIndexEdgeMono[i];
-
-            // 如果这条误差边是来自于outlier，也就是上一次优化去掉的
+            // 如果这条误差边是来自于outlier (level==1)，也就是上一次优化去掉的
             // 重新计算，因为上一次外点这一次可能成为内点
-            if (pFrame->mvbOutlier[idx])
+            if (edge->level())
             {
-                e->computeError();
+                edge->computeError();
             }
 
             // 就是error*\Omega*error,表征了这个点的误差大小(考虑置信度以后)
-            const float chi2 = e->chi2();
+            const float chi2 = edge->chi2();
 
             if (chi2 > chi2Mono[it])
             {
-                pFrame->mvbOutlier[idx] = true;
-                e->setLevel(1); // 设置为outlier , level 1 对应为外点,上面的过程中我们设置其为不优化
-                nBad++;
+                edge->setLevel(1); // 设置为outlier , level 1 对应为外点,上面的过程中我们设置其为不优化
             }
             else
             {
-                pFrame->mvbOutlier[idx] = false;
-                e->setLevel(0); // 设置为inlier, level 0 对应为内点,上面的过程中我们就是要优化这些关系
+                edge->setLevel(0); // 设置为inlier, level 0 对应为内点,上面的过程中我们就是要优化这些关系
             }
 
             if (it == 2)
-                e->setRobustKernel(0); // 除了前两次优化需要RobustKernel以外, 其余的优化都不需要 -- 因为重投影的误差已经有明显的下降了
+                edge->setRobustKernel(0); // 除了前两次优化需要RobustKernel以外, 其余的优化都不需要 -- 因为重投影的误差已经有明显的下降了
         }
         if (optimizer.edges().size() < 10)
             break;
     }
 
-    optimizer.initializeOptimization();
-    optimizer.optimize(30);
+    // Recover optimized pose and return number of inliers
+    // Step 5 得到优化后的当前帧的位姿
     g2o::VertexSE3Expmap *vSE3_recov = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(0));
     g2o::SE3Quat SE3quat_recov = vSE3_recov->estimate();
     Sophus::SE3<float> Tcw_recov(
         SE3quat_recov.rotation().cast<float>(),
         SE3quat_recov.translation().cast<float>());
-    CurrentFrame.SetPose(Tcw_recov);
+    CurrentFrame->SetPose(Tcw_recov);
 
-    return true;
+    // Get the outlier status of points in current frame after the pose optimized
+    vector<int> outlierIdx;
+    outlierIdx.reserve(N);
+    for (size_t i = 0, iend = vpEdgesMono.size(); i < iend; i++)
+    {
+        EdgeSE3ProjectDirect *edge = vpEdgesMono[i];
+        const int ptIdx = vnIndexEdgeMono[i];
+        if (edge->level())
+        {
+            outlierIdx.push_back(ptIdx);
+        }
+    }
+
+    return outlierIdx;
 }
 
-bool Tracking::TrackWithSparseAlignment()
+bool Tracking::TrackWithSparseAlignment(int nValidSearchPoints = 20, int nValidInliner = 50)
 {
     // Update last frame pose according to its reference keyframe
     // Create "visual odometry" points if in Localization Mode
@@ -4383,47 +4368,76 @@ bool Tracking::TrackWithSparseAlignment()
 
     // TODO: Step 2：根据IMU或者恒速模型得到当前帧的初始位姿
 
-    // 清空当前帧的地图点
-    fill(mCurrentFrame.mvpMapPoints.begin(), mCurrentFrame.mvpMapPoints.end(),
-         static_cast<MapPoint *>(NULL));
-
     // Fill current frame's points with local map points which is in view
-    mCurrentFrame.mvpMapPoints = SearchPointsInFrames(&mvpLocalMapPoints,
+    vector<MapPoint *> points = SearchPointsInFrames(&mvpLocalMapPoints,
                                                       &mLastFrame,
                                                       &mCurrentFrame);
-
+    // 如果匹配点太少, using next tracking method
+    if (points.size() < nValidSearchPoints)
+    {
+        return false;
+    }
     // CurrentFrame's pose should have initialized
-    int status = PoseOptimizationDirect(&mLastFrame, &mCurrentFrame);
+    vector<int> outlierIdx = PoseOptimizationDirect(&mLastFrame, &points);
 
-    // Last frame = reference frame
-    // Check last frame 3D point inliner number
-    // int nInliner_lastFrame = 0;
-    // for (int i = 0; i < mLastFrame.N; i++)
-    // {
-    //     if (mLastFrame.mvpMapPoints[i] && mLastFrame.mvpMapPoints[i]->isBad() == false &&
-    //         mLastFrame.mvbOutlier[i] == false)
-    //         nInliner_lastFrame++;
-    // }
-    // if (nInliner_lastFrame < 30)
-    // {
-    //     printf("last frame has no enough inliner map points(%d)", nInliner_lastFrame);
-    //     return false;
-    // }
+#ifndef NDEBUG
+    printf("#Outlier: %d\n", outlierIdx.size());
+    // optimizer.setVerbose(true);
+#endif
+    //-----------------------------------------------
+    // Discard outliers
+    // Step 5：剔除地图点中外点
+    // 成功匹配到的地图点数目
+    int nmatchesMap = 0;
+    for (outlierIdx::iterator vit = outlierIdx->begin(), vend = outlierIdx->end(); vit != vend; vit++)
 
-    return status > 0;
+    {
+        int ptIdx = *it;
+        MapPoint *pMP = mCurrentFrame.mvpMapPoints[ptIdx];
+        if (pMP)
+        { //如果优化pose后判断某个地图点變為外点，清除它的所有关系
+            mCurrentFrame.mvpMapPoints[ptIdx] = static_cast<MapPoint *>(NULL);
+            mCurrentFrame.mvbOutlier[ptIdx] = false;
+            if (i < mCurrentFrame.Nleft)
+            {
+                pMP->mbTrackInView = false;
+            }
+            else
+            {
+                pMP->mbTrackInViewR = false;
+            }
+            pMP->mnLastFrameSeen = mCurrentFrame.mnId;
+            // nmatches--;
+            else if (mCurrentFrame.mvpMapPoints[i]->Observations() > 0)
+                // nmatchesMap++;////////////////////////////////////////////
+        }
+    }
+
+    // 纯定位模式下：如果成功追踪的地图点非常少,那么这里的mbVO标志就会置位
+    if (mbOnlyTracking)
+    {
+        mbVO = nmatchesMap < 10;
+        return nmatches > 20;
+    }
+
+    if (mSensor == System::IMU_MONOCULAR || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD)
+        return true;
+    else
+        return nmatchesMap >= 10; // 匹配超过10个点就认为跟踪成功
+
+    return status < nValidInliner;
 }
 
 /**
  * @brief Search points in both frames
- * @param[in] mapPoints                       points to search from
- * @param[in] lastFrame                       (last) frame
- * @param[in] currentFrame           (current) frame
+ * @param[in] mapPoints                       points set to search from
+ * @param[in] lastFrame                       last/reference frame
  * @param[in] viewingCosLimit           夹角余弦，用于限制地图点和光心连线和法线的夹角 (Tracking::SearchLocalPoints() use 0.5 )
  * @return vector<MapPoint*>                         points searched
  */
-vector<MapPoint *> Tracking::SearchPointsInFrames(const vector<MapPoint *> *mapPoints,
-                                                  Frame *lastFrame, Frame *currentFrame, 
-                                                  float viewingCosLimit = 0.5)
+vector<MapPoint *> Tracking::SearchPointsInFrame(const vector<MapPoint *> *mapPoints,
+                                                 Frame *lastFrame,
+                                                 float viewingCosLimit = 0.5)
 {
     // number of points searched
     vector<MapPoint *> points;
@@ -4431,9 +4445,8 @@ vector<MapPoint *> Tracking::SearchPointsInFrames(const vector<MapPoint *> *mapP
     {
         MapPoint *pMP = *vit;
 
-        if (!pMP->isBad()                                   // not 坏点
-            && lastFrame->isInFrustum(pMP, viewingCosLimit) // In view of both frame
-            && currentFrame->isInFrustum(pMP, viewingCosLimit))
+        if (pMP && !pMP->isBad()                             // not 坏点
+            && lastFrame->isInFrustum(pMP, viewingCosLimit)) // In view of both frame
         {
             points.push_back(pMP);
         }
@@ -4441,9 +4454,8 @@ vector<MapPoint *> Tracking::SearchPointsInFrames(const vector<MapPoint *> *mapP
         // We don't want to let original orb-slam3 to project & search
         // (don't want to affect Tracking::SearchLocalPoints())
         // We want to search points in view only
-        pMP->mbTrackInView = false;
-        pMP->mbTrackInViewR = false;
+        // pMP->mbTrackInView = false;
+        // pMP->mbTrackInViewR = false;
     }
     return points;
 } // namespace ORB_SLAM
-
