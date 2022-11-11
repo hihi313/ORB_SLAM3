@@ -4200,7 +4200,7 @@ int PoseOptimizationDirect(Frame *LastFrame, Frame *CurrentFrame,
     optimizer.setAlgorithm(solver);
 #ifndef NDEBUG
     // To show the g2o log
-    optimizer.setVerbose(true);
+    // optimizer.setVerbose(true);
 #endif
 
     // 输入的lastframe中,有效的,参与优化过程的2D-3D点对
@@ -4236,13 +4236,12 @@ int PoseOptimizationDirect(Frame *LastFrame, Frame *CurrentFrame,
     unique_lock<mutex> lock(MapPoint::mGlobalMutex);
 
     // Image of last frame, to get the intensity value
-    const cv::Mat &lastImg = LastFrame->mvImagePyramid[0];
+    cv::Mat *lastImg = &(LastFrame->mvImagePyramid[0]);
     // add edge, 遍历last frame中的所有地图点
-    // edge id
-    id = 0;
+    int id = 0; // edge id
     for (int i = 0; i < N; i++)
     {
-        MapPoint *pMP = points[i];
+        MapPoint *pMP = (*points)[i];
         // 如果这个地图点还存在没有被剔除掉
         if (pMP // 如果这个地图点还存在没有被剔除掉
                 // TODO: delete below condition?
@@ -4253,14 +4252,14 @@ int PoseOptimizationDirect(Frame *LastFrame, Frame *CurrentFrame,
         {
             // add edge
             EdgeSE3ProjectDirect *edge = new EdgeSE3ProjectDirect(
-                pMP->GetWorldPos().cast<double>(), &CurrentFrame);
+                pMP->GetWorldPos().cast<double>(), CurrentFrame);
             edge->setVertex(0, pose);
             // Transform into Camera Coords.
-            Eigen::Vector3f p3Dc = LastFrame->GetPose() * pMP->GetWorldPos()
-                                                          // get projected 2D coordinate
-                                                          Eigen::Vector2d uv = LastFrame->mpCamera->project(p3Dc.cast<double>());
+            Eigen::Vector3d p3Dc = (LastFrame->GetPose() * pMP->GetWorldPos()).cast<double>();
+            // get projected 2D coordinate
+            Eigen::Vector2d uv = LastFrame->mpCamera->project(p3Dc);
             // pixel intensity from last frame, the observation/ground truth of photometric error
-            edge->setMeasurement(getPixelValue(&lastImg, uv(0), uv(1)));
+            edge->setMeasurement(getPixelValue(lastImg, uv(0), uv(1)));
             edge->setInformation(Eigen::Matrix<double, 1, 1>::Identity());
             edge->setId(id++);
 
@@ -4287,7 +4286,7 @@ int PoseOptimizationDirect(Frame *LastFrame, Frame *CurrentFrame,
         return 0;
     }
 #ifndef NDEBUG
-    printf("#edges in graph: %d\n", optimizer.edges().size());
+    // printf("#edges in graph: %d\n", optimizer.edges().size());
     // optimizer.setVerbose(true);
 #endif
 
@@ -4300,6 +4299,7 @@ int PoseOptimizationDirect(Frame *LastFrame, Frame *CurrentFrame,
     const int its[4] = {10, 10, 10, 10};                    // 四次迭代，每次迭代的次数
 
     // 一共进行四次优化，每次会剔除外点
+    int nBad = 0;
     for (size_t it = 0; it < 4; it++)
     {
         // Set again? & reset before each optimization ?
@@ -4310,7 +4310,6 @@ int PoseOptimizationDirect(Frame *LastFrame, Frame *CurrentFrame,
         // 开始优化，优化10次
         optimizer.optimize(its[it]);
 
-        nBad = 0;
         // 优化结束,开始遍历参与优化的每一条误差边(单目或双相机的相机1)
         for (size_t i = 0, iend = vpEdgesMono.size(); i < iend; i++)
         {
@@ -4360,7 +4359,7 @@ int PoseOptimizationDirect(Frame *LastFrame, Frame *CurrentFrame,
         // outlier , level 1 对应为外点
         if (edge->level())
         {
-            outliers.push_back(points[ptIdx]);
+            outliers->push_back((*points)[ptIdx]);
         }
     }
 
@@ -4371,7 +4370,7 @@ int PoseOptimizationDirect(Frame *LastFrame, Frame *CurrentFrame,
 template <class T>
 inline int indexOf(vector<T> *v, T K)
 {
-    v::iterator it = find(v->begin(), v->end(), K);
+    typename vector<T>::iterator it = find(v->begin(), v->end(), K);
     // If element was found
     if (it != v->end())
     {
@@ -4392,8 +4391,8 @@ inline int indexOf(vector<T> *v, T K)
 /// @param nValidInliner at least N points is inliner after current frame pose optimized
 /// (reference from Tracking::TrackWithMotionModel())
 /// @return if inliner > nValidInliner then return true
-bool Tracking::TrackWithSparseAlignment(int nValidSearchPoints = 20,
-                                        int nValidInliner = 10)
+bool Tracking::TrackWithSparseAlignment(int nValidSearchPoints/*  = 20 */,
+                                        int nValidInliner/*  = 10 */)
 {
     // Update last frame pose according to its reference keyframe
     // Create "visual odometry" points if in Localization Mode
@@ -4403,8 +4402,8 @@ bool Tracking::TrackWithSparseAlignment(int nValidSearchPoints = 20,
     // TODO: 根据IMU或者恒速模型得到当前帧的初始位姿
 
     // 1. Get more points in last frame
-    vector<MapPoint *> points = SearchPointsInFrames(&mvpLocalMapPoints,
-                                                     &mLastFrame);
+    vector<MapPoint *> points = SearchPointsInFrame(&mvpLocalMapPoints,
+                                                    &mLastFrame);
     // 如果匹配点太少, return false to using next tracking method
     if (points.size() < nValidSearchPoints)
     {
@@ -4418,12 +4417,12 @@ bool Tracking::TrackWithSparseAlignment(int nValidSearchPoints = 20,
                                          &points, &outliers);
 
 #ifndef NDEBUG
-    printf("#Outlier: %d\n", outliers.size());
+    // printf("#Outlier: %d\n", outliers.size());
 #endif
 
     // 3. handle the outlier point after current frame's pose optimized
     // Discard outliers, reference from Tracking::TrackWithMotionModel()
-    for (outliers::iterator vit = outliers.begin(), vend = outliers.end(); vit != vend; vit++)
+    for (vector<MapPoint *>::iterator vit = outliers.begin(), vend = outliers.end(); vit != vend; vit++)
 
     {
         MapPoint *outlier = *vit;
@@ -4460,13 +4459,13 @@ bool Tracking::TrackWithSparseAlignment(int nValidSearchPoints = 20,
  * @param[in] viewingCosLimit 夹角余弦，用于限制地图点和光心连线和法线的夹角 (Tracking::SearchLocalPoints() use 0.5 )
  * @return vector<MapPoint*> points searched
  */
-vector<MapPoint *> Tracking::SearchPointsInFrame(const vector<MapPoint *> *mapPoints,
+vector<MapPoint *> Tracking::SearchPointsInFrame(vector<MapPoint *> *mapPoints,
                                                  Frame *frame,
-                                                 float viewingCosLimit = 0.5)
+                                                 float viewingCosLimit/*  = 0.5 */)
 {
     // number of points searched
     vector<MapPoint *> points;
-    for (mapPoints::iterator vit = mapPoints->begin(), vend = mapPoints->end(); vit != vend; vit++)
+    for (vector<MapPoint *>::iterator vit = mapPoints->begin(), vend = mapPoints->end(); vit != vend; vit++)
     {
         MapPoint *pMP = *vit;
 

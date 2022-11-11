@@ -349,14 +349,18 @@ protected:
     double mTime_LocalMapTrack;
     double mTime_NewKF_Dec;
 
-    GeometricCamera* mpCamera, *mpCamera2;
+    GeometricCamera *mpCamera, *mpCamera2;
 
     int initID, lastID;
 
     Sophus::SE3f mTlr;
 
-    void newParameterLoader(Settings* settings);
-    bool TrackWithSparseAlignment();
+    void newParameterLoader(Settings *settings);
+    bool TrackWithSparseAlignment(int nValidSearchPoints = 20,
+                                  int nValidInliner = 10);
+    vector<MapPoint *> SearchPointsInFrame(vector<MapPoint *> *mapPoints,
+                                           Frame *frame,
+                                           float viewingCosLimit = 0.5);
 
 #ifdef REGISTER_LOOP
     bool Stop();
