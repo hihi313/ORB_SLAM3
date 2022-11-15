@@ -13,7 +13,7 @@ RUN rm -rf /dpds/ORB_SLAM3
 # Install 
 RUN apt update \
     && apt install -y --no-install-recommends \
-    nano g++ cmake make ninja-build git gcc ca-certificates
+    nano g++ cmake make ninja-build git gcc ca-certificates gdb
 
 # Clean up
 RUN apt clean \

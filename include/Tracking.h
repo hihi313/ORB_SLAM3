@@ -357,7 +357,7 @@ protected:
 
     void newParameterLoader(Settings *settings);
     bool TrackWithSparseAlignment(int nValidSearchPoints = 20,
-                                  int nValidInliner = 10);
+                                  int nValidInliner = 20);
     vector<MapPoint *> SearchPointsInFrame(vector<MapPoint *> *mapPoints,
                                            Frame *frame,
                                            float viewingCosLimit = 0.5);

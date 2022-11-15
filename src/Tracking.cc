@@ -1953,7 +1953,7 @@ void Tracking::Track()
                     Verbose::PrintMess("TRACK: Track with motion model", Verbose::VERBOSITY_DEBUG);
                     // TrackWithSparseAlignment
                     bOK = TrackWithSparseAlignment();
-                    if(!bOK)
+                    if (!bOK)
                         bOK = TrackWithMotionModel();
                     if(!bOK)
                         bOK = TrackReferenceKeyFrame();
@@ -4311,6 +4311,7 @@ int PoseOptimizationDirect(Frame *LastFrame, Frame *CurrentFrame,
         optimizer.optimize(its[it]);
 
         // 优化结束,开始遍历参与优化的每一条误差边(单目或双相机的相机1)
+        nBad = 0;
         for (size_t i = 0, iend = vpEdgesMono.size(); i < iend; i++)
         {
             EdgeSE3ProjectDirect *edge = vpEdgesMono[i];
@@ -4400,6 +4401,18 @@ bool Tracking::TrackWithSparseAlignment(int nValidSearchPoints/*  = 20 */,
     UpdateLastFrame();
 
     // TODO: 根据IMU或者恒速模型得到当前帧的初始位姿
+    if (mpAtlas->isImuInitialized() && (mCurrentFrame.mnId>mnLastRelocFrameId+mnFramesToResetIMU))
+    {
+        // Predict state with IMU if it is initialized and it doesnt need reset
+        // IMU完成初始化 并且 距离重定位挺久不需要重置IMU，用IMU来估计位姿，没有后面的这那那这的
+        PredictStateIMU();
+        return true;
+    }
+    else
+    {
+        // 根据之前估计的速度，用恒速模型得到当前帧的初始位姿。
+        mCurrentFrame.SetPose(mVelocity * mLastFrame.GetPose());
+    }
 
     // 1. Get more points in last frame
     vector<MapPoint *> points = SearchPointsInFrame(&mvpLocalMapPoints,
@@ -4415,10 +4428,6 @@ bool Tracking::TrackWithSparseAlignment(int nValidSearchPoints/*  = 20 */,
     vector<MapPoint *> outliers;
     int nInlier = PoseOptimizationDirect(&mLastFrame, &mCurrentFrame,
                                          &points, &outliers);
-
-#ifndef NDEBUG
-    // printf("#Outlier: %d\n", outliers.size());
-#endif
 
     // 3. handle the outlier point after current frame's pose optimized
     // Discard outliers, reference from Tracking::TrackWithMotionModel()
@@ -4449,6 +4458,13 @@ bool Tracking::TrackWithSparseAlignment(int nValidSearchPoints/*  = 20 */,
         }
     }
 
+#ifndef NDEBUG
+    printf("#Inlier=%d,\t#Outlier=%d\n", nInlier, outliers.size());
+    if (nInlier >= nValidInliner)
+        printf("track with TrackWithSparseAlignment\n");
+    else
+        printf("TrackWithSparseAlignment fail\n");
+#endif
     return nInlier >= nValidInliner;
 }
 

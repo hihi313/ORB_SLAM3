@@ -38,7 +38,7 @@ do
         IMG_TAG="$OPTARG"
         ;;
     v)
-        VOLUME="$OPTARG"
+        VOLUME="-v $OPTARG"
         ;;
     r)
         RM=""
@@ -62,7 +62,7 @@ do
         # --user="$(id -u):$(id -g)" \
 
         sudo xhost +local:root &&
-            docker run -it $RM $GPU $DISPLAY_VOLUME -v"$VOLUME" \
+            docker run -it $RM $GPU $DISPLAY_VOLUME $VOLUME \
                 -e QT_X11_NO_MITSHM=1 \
                 -p 8087:8087 \
                 -v /dev:/dev:ro \
