@@ -92,6 +92,7 @@ int main(int argc, char **argv)
         // Main loop
         cv::Mat im;
         int proccIm = 0;
+        cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
         for(int ni=0; ni<nImages[seq]; ni++, proccIm++)
         {
 
@@ -128,6 +129,9 @@ int main(int argc, char **argv)
                 SLAM.InsertResizeTime(t_resize);
 #endif
             }
+            
+            // clahe
+            clahe->apply(im,im);
 
     #ifdef COMPILEDWITHC11
             std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
