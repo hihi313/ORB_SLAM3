@@ -1,7 +1,4 @@
 {
-    // "cmake.debugConfig":{
-    //     "miDebuggerPath":"/usr/share/gdb",
-    // },
     "files.associations": {
         "vector": "cpp",
         "chrono": "cpp",
@@ -17,6 +14,18 @@
         "valarray": "cpp"
     },
     "editor.rulers": [
-    80,120
-    ]
+        80,
+        120
+    ],
+    // "cmake.debugConfig":{
+    //     "miDebuggerPath":"/usr/share/gdb",
+    // },
+    "cmake.debugConfig": {
+        "args": [
+            "${workspaceFolder}/Vocabulary/ORBvoc.txt",
+            "${workspaceFolder}/Examples/Monocular/EuRoC.yaml",
+            "${workspaceFolder}/datasets/MH01",
+            "${workspaceFolder}/Examples/Monocular/EuRoC_TimeStamps/MH01.txt"
+        ]
+    }
 }

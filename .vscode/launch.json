@@ -10,7 +10,7 @@
             "name": "(gdb) Launch",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/Examples/Monocular/mono_euroc",
+            "program": "${command:cmake.launchTargetPath}",
             "args": [
                 "${workspaceFolder}/Vocabulary/ORBvoc.txt",
                 "${workspaceFolder}/Examples/Monocular/EuRoC.yaml",

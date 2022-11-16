@@ -3033,13 +3033,15 @@ bool Tracking::TrackLocalMap()
 
     // Decide if the tracking was succesful
     // More restrictive if there was a relocalization recently
-    mpLocalMapper->mnMatchesInliers=mnMatchesInliers;
-    if(mCurrentFrame.mnId<mnLastRelocFrameId+mMaxFrames && mnMatchesInliers<50)
+    mpLocalMapper->mnMatchesInliers = mnMatchesInliers;
+#ifndef NDEBUG
+    printf("TrackLocalMap: mnMatchesInliers=%d\n");
+#endif
+    if (mCurrentFrame.mnId < mnLastRelocFrameId + mMaxFrames && mnMatchesInliers < 50)
         return false;
 
-    if((mnMatchesInliers>10)&&(mState==RECENTLY_LOST))
+    if ((mnMatchesInliers > 10) && (mState == RECENTLY_LOST))
         return true;
-
 
     if (mSensor == System::IMU_MONOCULAR)
     {
@@ -4232,50 +4234,51 @@ int PoseOptimizationDirect(Frame *LastFrame, Frame *CurrentFrame,
     const float deltaMono = sqrt(5.991);
 
     // Step 3：添加一元边
-    // 锁定地图点。由于需要使用地图点来构造顶点和边,因此不希望在构造的过程中部分地图点被改写造成不一致甚至是段错误
-    unique_lock<mutex> lock(MapPoint::mGlobalMutex);
+    { // Critical section, to lock mutex
+        // 锁定地图点。由于需要使用地图点来构造顶点和边,因此不希望在构造的过程中部分地图点被改写造成不一致甚至是段错误
+        unique_lock<mutex> lock(MapPoint::mGlobalMutex);
 
-    // Image of last frame, to get the intensity value
-    cv::Mat *lastImg = &(LastFrame->mvImagePyramid[0]);
-    // add edge, 遍历last frame中的所有地图点
-    int id = 0; // edge id
-    for (int i = 0; i < N; i++)
-    {
-        MapPoint *pMP = (*points)[i];
-        // 如果这个地图点还存在没有被剔除掉
-        if (pMP // 如果这个地图点还存在没有被剔除掉
-                // TODO: delete below condition?
-                // Conventional SLAM. 不存在相机2，则有可能为单目与双目
-            && !CurrentFrame->mpCamera2
-            // Monocular observation. 单目情况，因为双目模式下pFrame->mvuRight[i]会大于0
-            && CurrentFrame->mvuRight[i] < 0)
+        // Image of last frame, to get the intensity value
+        cv::Mat *lastImg = &(LastFrame->mvImagePyramid[0]);
+        // add edge, 遍历last frame中的所有地图点
+        int id = 0; // edge id
+        for (int i = 0; i < N; i++)
         {
-            // add edge
-            EdgeSE3ProjectDirect *edge = new EdgeSE3ProjectDirect(
-                pMP->GetWorldPos().cast<double>(), CurrentFrame);
-            edge->setVertex(0, pose);
-            // Transform into Camera Coords.
-            Eigen::Vector3d p3Dc = (LastFrame->GetPose() * pMP->GetWorldPos()).cast<double>();
-            // get projected 2D coordinate
-            Eigen::Vector2d uv = LastFrame->mpCamera->project(p3Dc);
-            // pixel intensity from last frame, the observation/ground truth of photometric error
-            edge->setMeasurement(getPixelValue(lastImg, uv(0), uv(1)));
-            edge->setInformation(Eigen::Matrix<double, 1, 1>::Identity());
-            edge->setId(id++);
+            MapPoint *pMP = (*points)[i];
+            // 如果这个地图点还存在没有被剔除掉
+            if (pMP // 如果这个地图点还存在没有被剔除掉
+                    // TODO: delete below condition?
+                    // Conventional SLAM. 不存在相机2，则有可能为单目与双目
+                && !CurrentFrame->mpCamera2
+                // Monocular observation. 单目情况，因为双目模式下pFrame->mvuRight[i]会大于0
+                && CurrentFrame->mvuRight[i] < 0)
+            {
+                // add edge
+                EdgeSE3ProjectDirect *edge = new EdgeSE3ProjectDirect(
+                    pMP->GetWorldPos().cast<double>(), CurrentFrame);
+                edge->setVertex(0, pose);
+                // Transform into Camera Coords.
+                Eigen::Vector3d p3Dc = (LastFrame->GetPose() * pMP->GetWorldPos()).cast<double>();
+                // get projected 2D coordinate
+                Eigen::Vector2d uv = LastFrame->mpCamera->project(p3Dc);
+                // pixel intensity from last frame, the observation/ground truth of photometric error
+                edge->setMeasurement(getPixelValue(lastImg, uv(0), uv(1)));
+                edge->setInformation(Eigen::Matrix<double, 1, 1>::Identity());
+                edge->setId(id++);
 
-            // 鲁棒核函数
-            g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
-            rk->setDelta(deltaMono);
-            edge->setRobustKernel(rk);
+                // 鲁棒核函数
+                g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
+                rk->setDelta(deltaMono);
+                edge->setRobustKernel(rk);
 
-            optimizer.addEdge(edge);
+                optimizer.addEdge(edge);
 
-            vpEdgesMono.push_back(edge);
-            vnIndexEdgeMono.push_back(i);
-            nInitialCorrespondences++;
+                vpEdgesMono.push_back(edge);
+                vnIndexEdgeMono.push_back(i);
+                nInitialCorrespondences++;
+            }
         }
     }
-
     // 如果没有足够的匹配点,那么就只好放弃了
     // cout << "PO: vnIndexEdgeMono.size() = " << vnIndexEdgeMono.size() << "   vnIndexEdgeRight.size() = " << vnIndexEdgeRight.size() << endl;
     if (nInitialCorrespondences < 3)
@@ -4415,8 +4418,9 @@ bool Tracking::TrackWithSparseAlignment(int nValidSearchPoints/*  = 20 */,
     }
 
     // 1. Get more points in last frame
-    vector<MapPoint *> points = SearchPointsInFrame(&mvpLocalMapPoints,
+    vector<MapPoint *> points = SearchPointsInFrame(&mvpLocalMapPoints, //&(mLastFrame.mvpMapPoints)
                                                     &mLastFrame);
+//////////////////////////////////////should fill points into mCurentFrame?
     // 如果匹配点太少, return false to using next tracking method
     if (points.size() < nValidSearchPoints)
     {
