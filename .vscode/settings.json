@@ -27,5 +27,6 @@
             "${workspaceFolder}/datasets/MH01",
             "${workspaceFolder}/Examples/Monocular/EuRoC_TimeStamps/MH01.txt"
         ]
-    }
+    },
+    "debug.allowBreakpointsEverywhere": true
 }

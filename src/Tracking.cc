@@ -4159,11 +4159,12 @@ public:
     // cached reference frame's image pointer
     cv::Mat *image_ = nullptr;
     Frame *frame_;
+    int img_margin;
 
     EdgeSE3ProjectDirect() {}
 
-    EdgeSE3ProjectDirect(Eigen::Vector3d point, Frame *frame)
-        : x_world_(point), frame_(frame)
+    EdgeSE3ProjectDirect(Eigen::Vector3d point, Frame *frame, int margin = 4)
+        : x_world_(point), frame_(frame), img_margin(margin)
     {
         // cache the image (pointer)
         image_ = &(frame_->mvImagePyramid[0]);
@@ -4178,7 +4179,19 @@ public:
         Eigen::Vector3d x_local = v->estimate().map(x_world_);
         // get projected 2D coordinate
         Eigen::Vector2d uv = frame_->mpCamera->project(x_local);
-        _error(0, 0) = getPixelValue(image_, uv(0), uv(1)) - _measurement;
+        // check x,y is in the image
+        if (uv(0) - img_margin < 0 ||
+            (uv(0) + img_margin) > image_->cols ||
+            (uv(1) - img_margin) < 0 ||
+            (uv(1) + img_margin) > image_->rows)
+        {
+            _error(0, 0) = 0.0;
+            this->setLevel(1);
+        }
+        else
+        {
+            _error(0, 0) = getPixelValue(image_, uv(0), uv(1)) - _measurement;
+        }
     }
 };
 
@@ -4420,7 +4433,17 @@ bool Tracking::TrackWithSparseAlignment(int nValidSearchPoints/*  = 20 */,
     // 1. Get more points in last frame
     vector<MapPoint *> points = SearchPointsInFrame(&mvpLocalMapPoints, //&(mLastFrame.mvpMapPoints)
                                                     &mLastFrame);
-//////////////////////////////////////should fill points into mCurentFrame?
+    //////////////////////////////////////should fill points into mCurentFrame?
+    // 最小距离 < 0.9*次小距离 匹配成功，检查旋转
+    ORBmatcher matcher(0.9,true);
+    // 清空当前帧的地图点
+    fill(mCurrentFrame.mvpMapPoints.begin(), mCurrentFrame.mvpMapPoints.end(), static_cast<MapPoint *>(NULL));
+    // Project points seen in previous frame
+    // 设置特征匹配过程中的搜索半径
+    int th = (mSensor == System::STEREO) ? 7 : 15;
+    // Step 3：用上一帧地图点进行投影匹配，如果匹配点不够，则扩大搜索半径再来一次
+    int nmatches = matcher.SearchByProjection(mCurrentFrame, mLastFrame, th, mSensor == System::MONOCULAR || mSensor == System::IMU_MONOCULAR);
+
     // 如果匹配点太少, return false to using next tracking method
     if (points.size() < nValidSearchPoints)
     {
