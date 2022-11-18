@@ -1951,14 +1951,13 @@ void Tracking::Track()
                 else
                 {
                     Verbose::PrintMess("TRACK: Track with motion model", Verbose::VERBOSITY_DEBUG);
-                    // TrackWithSparseAlignment
-                    bOK = TrackWithSparseAlignment();
+
+                    // bOK = TrackWithSparseAlignment();
+                    // if (!bOK)
+                    bOK = TrackWithMotionModel();
                     if (!bOK)
-                        bOK = TrackWithMotionModel();
-                    if(!bOK)
                         bOK = TrackReferenceKeyFrame();
                 }
-
 
                 if (!bOK)
                 {
@@ -2051,12 +2050,11 @@ void Tracking::Track()
                 if(!mbVO)
                 {
                     // In last frame we tracked enough MapPoints in the map
-                    if(mbVelocity)
+                    if (mbVelocity)
                     {
-                        // TrackWithSparseAlignment
-                        bOK = TrackWithSparseAlignment();
-                        if (!bOK)
-                            bOK = TrackWithMotionModel();
+                        // bOK = TrackWithSparseAlignment();
+                        // if (!bOK)
+                        bOK = TrackWithMotionModel();
                     }
                     else
                     {
@@ -2877,9 +2875,6 @@ bool Tracking::TrackWithMotionModel()
         mCurrentFrame.SetPose(mVelocity * mLastFrame.GetPose());
     }
 
-
-
-
     fill(mCurrentFrame.mvpMapPoints.begin(),mCurrentFrame.mvpMapPoints.end(),static_cast<MapPoint*>(NULL));
 
     // Project points seen in previous frame
@@ -2890,13 +2885,14 @@ bool Tracking::TrackWithMotionModel()
     else
         th=15;
 
-    int nmatches = matcher.SearchByProjection(mCurrentFrame,mLastFrame,th,mSensor==System::MONOCULAR || mSensor==System::IMU_MONOCULAR);
+    // Get more point for PoseOptimizationDirect()
+    int nmatches = 0;// matcher.SearchByProjection(mCurrentFrame,mLastFrame,th,mSensor==System::MONOCULAR || mSensor==System::IMU_MONOCULAR);
 
     // If few matches, uses a wider window search
     if(nmatches<20)
     {
-        Verbose::PrintMess("Not enough matches, wider window search!!", Verbose::VERBOSITY_NORMAL);
-        fill(mCurrentFrame.mvpMapPoints.begin(),mCurrentFrame.mvpMapPoints.end(),static_cast<MapPoint*>(NULL));
+        // Verbose::PrintMess("Not enough matches, wider window search!!", Verbose::VERBOSITY_NORMAL);
+        // fill(mCurrentFrame.mvpMapPoints.begin(),mCurrentFrame.mvpMapPoints.end(),static_cast<MapPoint*>(NULL));
 
         nmatches = matcher.SearchByProjection(mCurrentFrame,mLastFrame,2*th,mSensor==System::MONOCULAR || mSensor==System::IMU_MONOCULAR);
         Verbose::PrintMess("Matches with wider search: " + to_string(nmatches), Verbose::VERBOSITY_NORMAL);
@@ -2912,8 +2908,17 @@ bool Tracking::TrackWithMotionModel()
             return false;
     }
 
-    // Optimize frame pose with all matches
-    Optimizer::PoseOptimization(&mCurrentFrame);
+    int nInlier = PoseOptimizationDirect(&mLastFrame, &mCurrentFrame,
+                                         &mLastFrame.mvpMapPoints, nullptr);
+    int nValidInlier = 30;
+    if (nInlier < nValidInlier)
+    {
+#ifndef NDEBUG
+        printf("PoseOptimizationDirect(): nInlier<%d\n", nValidInlier);
+#endif
+        // Optimize frame pose with all matches
+        Optimizer::PoseOptimization(&mCurrentFrame);
+    }
 
     // Discard outliers
     int nmatchesMap = 0;
@@ -3035,7 +3040,7 @@ bool Tracking::TrackLocalMap()
     // More restrictive if there was a relocalization recently
     mpLocalMapper->mnMatchesInliers = mnMatchesInliers;
 #ifndef NDEBUG
-    printf("TrackLocalMap: mnMatchesInliers=%d\n");
+    // printf("TrackLocalMap: mnMatchesInliers=%d\n");
 #endif
     if (mCurrentFrame.mnId < mnLastRelocFrameId + mMaxFrames && mnMatchesInliers < 50)
         return false;
@@ -4201,7 +4206,7 @@ public:
 /// @param CurrentFrame
 /// @param points map points in last frame
 /// @return 内点数目
-int PoseOptimizationDirect(Frame *LastFrame, Frame *CurrentFrame,
+int Tracking::PoseOptimizationDirect(Frame *LastFrame, Frame *CurrentFrame,
                            vector<MapPoint *> *points,
                            vector<MapPoint *> *outliers)
 {
@@ -4296,15 +4301,8 @@ int PoseOptimizationDirect(Frame *LastFrame, Frame *CurrentFrame,
     // cout << "PO: vnIndexEdgeMono.size() = " << vnIndexEdgeMono.size() << "   vnIndexEdgeRight.size() = " << vnIndexEdgeRight.size() << endl;
     if (nInitialCorrespondences < 3)
     {
-#ifndef NDEBUG
-        printf("nInitialCorrespondences < 3\n");
-#endif
         return 0;
     }
-#ifndef NDEBUG
-    // printf("#edges in graph: %d\n", optimizer.edges().size());
-    // optimizer.setVerbose(true);
-#endif
 
     // We perform 4 optimizations, after each optimization we classify observation as inlier/outlier
     // At the next optimization, outliers are not included, but at the end they can be classified as inliers again.
@@ -4331,6 +4329,7 @@ int PoseOptimizationDirect(Frame *LastFrame, Frame *CurrentFrame,
         for (size_t i = 0, iend = vpEdgesMono.size(); i < iend; i++)
         {
             EdgeSE3ProjectDirect *edge = vpEdgesMono[i];
+            const size_t idx = vnIndexEdgeMono[i];
 
             // 如果这条误差边是来自于outlier (level==1)，也就是上一次优化去掉的
             // 重新计算，因为上一次外点这一次可能成为内点
@@ -4344,11 +4343,13 @@ int PoseOptimizationDirect(Frame *LastFrame, Frame *CurrentFrame,
 
             if (chi2 > chi2Mono[it])
             {
+                CurrentFrame->mvbOutlier[idx] = true;
                 edge->setLevel(1); // 设置为outlier , level 1 对应为外点,上面的过程中我们设置其为不优化
                 nBad++;
             }
             else
             {
+                CurrentFrame->mvbOutlier[idx] = false;
                 edge->setLevel(0); // 设置为inlier, level 0 对应为内点,上面的过程中我们就是要优化这些关系
             }
 
@@ -4369,17 +4370,26 @@ int PoseOptimizationDirect(Frame *LastFrame, Frame *CurrentFrame,
     CurrentFrame->SetPose(Tcw_recov);
 
     // Get the outlier point's index
-    for (size_t i = 0, iend = vpEdgesMono.size(); i < iend; i++)
+    if (outliers)
     {
-        EdgeSE3ProjectDirect *edge = vpEdgesMono[i];
-        const int ptIdx = vnIndexEdgeMono[i];
-        // outlier , level 1 对应为外点
-        if (edge->level())
+        for (size_t i = 0, iend = vpEdgesMono.size(); i < iend; i++)
         {
-            outliers->push_back((*points)[ptIdx]);
+            EdgeSE3ProjectDirect *edge = vpEdgesMono[i];
+            const int ptIdx = vnIndexEdgeMono[i];
+            // outlier , level 1 对应为外点
+            if (edge->level())
+            {
+                outliers->push_back((*points)[ptIdx]);
+            }
         }
     }
 
+#ifndef NDEBUG
+    printf("PoseOptimizationDirect(): #edges=%d,\t#Inlier=%d,\t#Outlier=%d\n",
+           nInitialCorrespondences,
+           nInitialCorrespondences - nBad,
+           nBad);
+#endif
     // 并且返回内点数目
     return nInitialCorrespondences - nBad;
 }
@@ -4408,8 +4418,8 @@ inline int indexOf(vector<T> *v, T K)
 /// @param nValidInliner at least N points is inliner after current frame pose optimized
 /// (reference from Tracking::TrackWithMotionModel())
 /// @return if inliner > nValidInliner then return true
-bool Tracking::TrackWithSparseAlignment(int nValidSearchPoints/*  = 20 */,
-                                        int nValidInliner/*  = 10 */)
+bool Tracking::TrackWithSparseAlignment(int nValidSearchPoints /*  = 20 */,
+                                        int nValidInliner /*  = 10 */)
 {
     // Update last frame pose according to its reference keyframe
     // Create "visual odometry" points if in Localization Mode
@@ -4417,7 +4427,7 @@ bool Tracking::TrackWithSparseAlignment(int nValidSearchPoints/*  = 20 */,
     UpdateLastFrame();
 
     // TODO: 根据IMU或者恒速模型得到当前帧的初始位姿
-    if (mpAtlas->isImuInitialized() && (mCurrentFrame.mnId>mnLastRelocFrameId+mnFramesToResetIMU))
+    if (mpAtlas->isImuInitialized() && (mCurrentFrame.mnId > mnLastRelocFrameId + mnFramesToResetIMU))
     {
         // Predict state with IMU if it is initialized and it doesnt need reset
         // IMU完成初始化 并且 距离重定位挺久不需要重置IMU，用IMU来估计位姿，没有后面的这那那这的
@@ -4433,9 +4443,9 @@ bool Tracking::TrackWithSparseAlignment(int nValidSearchPoints/*  = 20 */,
     // 1. Get more points in last frame
     vector<MapPoint *> points = SearchPointsInFrame(&mvpLocalMapPoints, //&(mLastFrame.mvpMapPoints)
                                                     &mLastFrame);
-    //////////////////////////////////////should fill points into mCurentFrame?
+    /////////////////////// Fill matched map point for remaining slam system
     // 最小距离 < 0.9*次小距离 匹配成功，检查旋转
-    ORBmatcher matcher(0.9,true);
+    ORBmatcher matcher(0.9, true);
     // 清空当前帧的地图点
     fill(mCurrentFrame.mvpMapPoints.begin(), mCurrentFrame.mvpMapPoints.end(), static_cast<MapPoint *>(NULL));
     // Project points seen in previous frame
@@ -4443,6 +4453,7 @@ bool Tracking::TrackWithSparseAlignment(int nValidSearchPoints/*  = 20 */,
     int th = (mSensor == System::STEREO) ? 7 : 15;
     // Step 3：用上一帧地图点进行投影匹配，如果匹配点不够，则扩大搜索半径再来一次
     int nmatches = matcher.SearchByProjection(mCurrentFrame, mLastFrame, th, mSensor == System::MONOCULAR || mSensor == System::IMU_MONOCULAR);
+    /////////////////////// Fill matched map point for remaining slam system
 
     // 如果匹配点太少, return false to using next tracking method
     if (points.size() < nValidSearchPoints)
