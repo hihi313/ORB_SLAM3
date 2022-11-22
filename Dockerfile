@@ -4,11 +4,12 @@ ENV TZ=Etc/UTC
 ARG DEBIAN_FRONTEND=noninteractive
 ARG ROOT_PWD=root
 
-WORKDIR /app
-
 USER root
 # Set root password
 RUN echo 'root:${ROOT_PWD}' | chpasswd
+
+# Install things here
+WORKDIR /tmp
 
 # Install 
 RUN apt update \
@@ -29,6 +30,16 @@ RUN apt update \
     # Pangolin
     libgl1-mesa-dev libwayland-dev libxkbcommon-dev wayland-protocols libegl1-mesa-dev \
     libc++-dev libglew-dev libavutil-dev libavdevice-dev
+
+# Install Pangolin
+RUN git clone --recursive --branch v0.8 --single-branch https://github.com/stevenlovegrove/Pangolin.git \
+    && cd Pangolin \
+    && mkdir build \
+    && cd build \
+    && cmake -D CMAKE_BUILD_TYPE=RELEASE -GNinja ../\
+    && ninja \
+    && ninja install
+
 
 # Install OpenCV
 RUN git clone --branch 4.6.0 --single-branch https://github.com/opencv/opencv.git \
@@ -58,5 +69,7 @@ RUN git clone --branch 4.6.0 --single-branch https://github.com/opencv/opencv.gi
 # Clean up
 RUN apt clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+WORKDIR /app
 
 CMD bash 
