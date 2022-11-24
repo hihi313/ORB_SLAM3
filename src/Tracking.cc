@@ -1612,9 +1612,13 @@ Sophus::SE3f Tracking::GrabImageMonocular(const cv::Mat &im, const double &times
     lastID = mCurrentFrame.mnId;
     Track();
 
+#ifndef NDEBUG
+    printf("GrabImageMonocular(): fname=%s,\ttime=%f,\t#Keypoint=%d\n",
+           timestamp, filename, mCurrentFrame.N);
+#endif
+
     return mCurrentFrame.GetPose();
 }
-
 
 void Tracking::GrabImuData(const IMU::Point &imuMeasurement)
 {
