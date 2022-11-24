@@ -61,7 +61,7 @@ do
         # --mount type=bind,src="",dst="" \
         # --user="$(id -u):$(id -g)" \
 
-        sudo xhost + &&
+        sudo xhost + local:docker &&
             docker run -it $RM $GPU $DISPLAY_VOLUME $VOLUME \
                 -e QT_X11_NO_MITSHM=1 \
                 -e XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR \

@@ -1,1 +1,0 @@
-rosrun ORB_SLAM3 Mono $PWD/Vocabulary/ORBvoc.txt $PWD/Examples/Monocular/TUM-VI.yaml 
