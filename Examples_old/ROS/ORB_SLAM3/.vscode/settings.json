@@ -22,12 +22,11 @@
     // },
     "cmake.debugConfig": {
         "args": [
-            "${workspaceFolder}/Vocabulary/ORBvoc.txt",
-            "${workspaceFolder}/Examples/Monocular/TUM-VI.yaml",
-            "/dataset",
-            "${workspaceFolder}/Examples/Monocular/TUM_TimeStamps/dataset-corridor1_512.txt",
-            "trajectory_TUMVI_corridor1"
-        ] 
+            "/app/ORB_SLAM3/Vocabulary/ORBvoc.txt",
+            "/app/ORB_SLAM3/Examples/Monocular/EuRoC.yaml",
+            // "${workspaceFolder}/datasets/MH01",
+            // "${workspaceFolder}/Examples/Monocular/EuRoC_TimeStamps/MH01.txt"
+        ]
     },
     "debug.allowBreakpointsEverywhere": true
 }

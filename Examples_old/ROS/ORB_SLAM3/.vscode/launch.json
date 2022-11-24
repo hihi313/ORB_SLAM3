@@ -10,10 +10,10 @@
             "name": "(gdb) Launch",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${command:cmake.launchTargetPath}",
+            "program": "rosrun ORB_SLAM3 Mono",//"${command:cmake.launchTargetPath}",
             "args": [
-                // "${workspaceFolder}/Vocabulary/ORBvoc.txt",
-                // "${workspaceFolder}/Examples/Monocular/EuRoC.yaml",
+                "${workspaceFolder}/Vocabulary/ORBvoc.txt",
+                "${workspaceFolder}/Examples/Monocular/EuRoC.yaml",
                 // "${workspaceFolder}/datasets",
                 // "${workspaceFolder}/Examples/Monocular/EuRoC_TimeStamps/MH04.txt"
             ],

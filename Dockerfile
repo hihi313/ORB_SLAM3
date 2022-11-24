@@ -26,7 +26,7 @@ RUN apt update \
     # g2o dependencies
     libsuitesparse-dev qtdeclarative5-dev qt5-qmake libqglviewer-dev-qt5 \
     # Python libpython2.7-dev
-    python3 python-is-python3\
+    python3 python-is-python3 python3-pip \
     # Pangolin
     libgl1-mesa-dev libwayland-dev libxkbcommon-dev wayland-protocols libegl1-mesa-dev \
     libc++-dev libglew-dev libavutil-dev libavdevice-dev \
@@ -43,7 +43,7 @@ RUN git clone --recursive --branch v0.8 --single-branch https://github.com/steve
     && ninja install
 
 # Install OpenCV
-RUN git clone --branch 4.6.0 --single-branch https://github.com/opencv/opencv.git \
+RUN git clone --branch 4.4.0 --single-branch https://github.com/opencv/opencv.git \
     && cd opencv \
     && mkdir build \
     && cd build \
@@ -66,6 +66,9 @@ RUN git clone --branch 4.6.0 --single-branch https://github.com/opencv/opencv.gi
     ../ \
     && ninja \
     && ninja install
+
+# Install evo, trajectory evaluation tool
+RUN pip install evo --upgrade --no-binary evo
 
 # Clean up
 RUN apt clean \
