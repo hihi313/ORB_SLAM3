@@ -25,11 +25,13 @@ RUN apt update \
     libeigen3-dev \
     # g2o dependencies
     libsuitesparse-dev qtdeclarative5-dev qt5-qmake libqglviewer-dev-qt5 \
-    # Python
-    python libpython2.7-dev \
+    # Python libpython2.7-dev
+    python3 python-is-python3\
     # Pangolin
     libgl1-mesa-dev libwayland-dev libxkbcommon-dev wayland-protocols libegl1-mesa-dev \
-    libc++-dev libglew-dev libavutil-dev libavdevice-dev
+    libc++-dev libglew-dev libavutil-dev libavdevice-dev \
+    # GUI xeyes
+    libcanberra-gtk-module libcanberra-gtk3-module
 
 # Install Pangolin
 RUN git clone --recursive --branch v0.8 --single-branch https://github.com/stevenlovegrove/Pangolin.git \
@@ -39,7 +41,6 @@ RUN git clone --recursive --branch v0.8 --single-branch https://github.com/steve
     && cmake -D CMAKE_BUILD_TYPE=RELEASE -GNinja ../\
     && ninja \
     && ninja install
-
 
 # Install OpenCV
 RUN git clone --branch 4.6.0 --single-branch https://github.com/opencv/opencv.git \
@@ -71,5 +72,9 @@ RUN apt clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 WORKDIR /app
+
+# Set up env
+RUN echo "source /opt/ros/noetic/setup.bash" >> ~/.bashrc
+RUN echo "export ROS_PACKAGE_PATH=\$ROS_PACKAGE_PATH:$PWD/ORB_SLAM3/Examples_old/ROS/ORB_SLAM3" >> ~/.bashrc
 
 CMD bash 

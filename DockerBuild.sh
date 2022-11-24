@@ -4,7 +4,7 @@ echo "Sart time=$(date +"%T")"
 IMG_NAME="lmwafer/orb-slam-3-ready"
 IMG_TAG="1.1-ubuntu18.04"
 CTNR_NAME="orb-3-container"
-WORKDIR="/dpds"
+WORKDIR="/app"
 
 VOLUME=""
 while getopts "bei:t:v:r:" opt
@@ -61,11 +61,13 @@ do
         # --mount type=bind,src="",dst="" \
         # --user="$(id -u):$(id -g)" \
 
-        sudo xhost +local:root &&
+        sudo xhost + &&
             docker run -it $RM $GPU $DISPLAY_VOLUME $VOLUME \
                 -e QT_X11_NO_MITSHM=1 \
+                -e XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR \
                 -p 8087:8087 \
                 -v /dev:/dev:ro \
+                --net=host \
                 --privileged \
                 --init \
                 --ipc=host \
