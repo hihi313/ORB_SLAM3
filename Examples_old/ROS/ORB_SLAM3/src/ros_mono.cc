@@ -80,11 +80,12 @@ void ImageGrabber::GrabImage(const sensor_msgs::ImageConstPtr& msg)
     cv_bridge::CvImageConstPtr cv_ptr;
     try
     {
-        cv_ptr = cv_bridge::toCvShare(msg);
+        cv_ptr = cv_bridge::toCvShare(msg, sensor_msgs::image_encodings::MONO8);
     }
     catch (cv_bridge::Exception& e)
     {
         ROS_ERROR("cv_bridge exception: %s", e.what());
+        printf("cv_bridge exception: %s", e.what());
         return;
     }
 
