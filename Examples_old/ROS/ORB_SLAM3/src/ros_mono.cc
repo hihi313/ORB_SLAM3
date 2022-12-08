@@ -41,6 +41,23 @@ public:
     ORB_SLAM3::System* mpSLAM;
 };
 
+vector<double> times;
+void SaveTrackTime(const string &filename)
+{
+    cout << endl
+         << "Saving tracking time to " << filename << " ..." << endl;
+
+    ofstream f;
+    f.open(filename.c_str());
+    // f << fixed;
+    int s = times.size();
+    for (int i = 0; i < s; ++i)
+    {
+        f << setprecision(6) << times[i] << endl;
+    }
+    f.close();
+}
+
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "Mono");
@@ -57,6 +74,7 @@ int main(int argc, char **argv)
     ORB_SLAM3::System SLAM(argv[1],argv[2],ORB_SLAM3::System::MONOCULAR,true);
 
     ImageGrabber igb(&SLAM);
+    times.reserve(5000);
 
     ros::NodeHandle nodeHandler;
     ros::Subscriber sub = nodeHandler.subscribe("/camera/image_raw", 1, &ImageGrabber::GrabImage,&igb);
@@ -68,6 +86,7 @@ int main(int argc, char **argv)
 
     // Save camera trajectory
     SLAM.SaveKeyFrameTrajectoryTUM("KeyFrameTrajectory.txt");
+    SaveTrackTime("TrackingTime.txt");
 
     ros::shutdown();
 
@@ -90,5 +109,10 @@ void ImageGrabber::GrabImage(const sensor_msgs::ImageConstPtr& msg)
     cv::Mat im = cv_ptr->image;
     cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
     clahe->apply(im, im);
+
+    std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
     mpSLAM->TrackMonocular(im, cv_ptr->header.stamp.toSec());
+    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+    double t = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(end - start).count();
+    times.push_back(t);
 }

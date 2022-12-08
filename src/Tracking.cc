@@ -1613,8 +1613,8 @@ Sophus::SE3f Tracking::GrabImageMonocular(const cv::Mat &im, const double &times
     Track();
 
 #ifndef NDEBUG
-    printf("GrabImageMonocular(): fname=%s,\ttime=%f,\t#Keypoint=%d\n",
-           timestamp, filename, mCurrentFrame.N);
+    // printf("GrabImageMonocular(): fname=%s,\ttime=%f,\t#Keypoint=%d\n",
+    //        timestamp, filename, mCurrentFrame.N);
 #endif
 
     return mCurrentFrame.GetPose();
@@ -2918,7 +2918,7 @@ bool Tracking::TrackWithMotionModel()
     if (nInlier < nValidInlier)
     {
 #ifndef NDEBUG
-        printf("PoseOptimizationDirect(): nInlier<%d\n", nValidInlier);
+        // printf("PoseOptimizationDirect(): nInlier<%d\n", nValidInlier);
 #endif
         // Optimize frame pose with all matches
         Optimizer::PoseOptimization(&mCurrentFrame);
@@ -4389,10 +4389,10 @@ int Tracking::PoseOptimizationDirect(Frame *LastFrame, Frame *CurrentFrame,
     }
 
 #ifndef NDEBUG
-    printf("PoseOptimizationDirect(): #edges=%d,\t#Inlier=%d,\t#Outlier=%d\n",
-           nInitialCorrespondences,
-           nInitialCorrespondences - nBad,
-           nBad);
+    // printf("PoseOptimizationDirect(): #edges=%d,\t#Inlier=%d,\t#Outlier=%d\n",
+    //        nInitialCorrespondences,
+    //        nInitialCorrespondences - nBad,
+    //        nBad);
 #endif
     // 并且返回内点数目
     return nInitialCorrespondences - nBad;
@@ -4501,11 +4501,11 @@ bool Tracking::TrackWithSparseAlignment(int nValidSearchPoints /*  = 20 */,
     }
 
 #ifndef NDEBUG
-    printf("#Inlier=%d,\t#Outlier=%d\n", nInlier, outliers.size());
-    if (nInlier >= nValidInliner)
-        printf("track with TrackWithSparseAlignment\n");
-    else
-        printf("TrackWithSparseAlignment fail\n");
+    // printf("#Inlier=%d,\t#Outlier=%d\n", nInlier, outliers.size());
+    // if (nInlier >= nValidInliner)
+    //     printf("track with TrackWithSparseAlignment\n");
+    // else
+    //     printf("TrackWithSparseAlignment fail\n");
 #endif
     return nInlier >= nValidInliner;
 }
