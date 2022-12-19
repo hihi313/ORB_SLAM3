@@ -106,9 +106,12 @@ void ImageGrabber::GrabImage(const sensor_msgs::ImageConstPtr& msg)
         printf("cv_bridge exception: %s", e.what());
         return;
     }
+    cv::Mat im = cv_ptr->image;
+    cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
+    clahe->apply(im, im);
 
     std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-    mpSLAM->TrackMonocular(cv_ptr->image, cv_ptr->header.stamp.toSec());
+    mpSLAM->TrackMonocular(im, cv_ptr->header.stamp.toSec());
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
     double t = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(end - start).count();
     times.push_back(t);
